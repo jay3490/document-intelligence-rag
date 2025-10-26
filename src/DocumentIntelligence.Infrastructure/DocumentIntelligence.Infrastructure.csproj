@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\DocumentIntelligence.Core\DocumentIntelligence.Core.csproj" />
+  </ItemGroup>
+
+</Project>
