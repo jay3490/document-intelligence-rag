@@ -36,6 +36,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<QuestionAnsweringService>();
         services.AddSingleton<IngestionPipeline>();
 
+        services.AddHttpClient(OpenAiHttpClient.Name, (sp, client) =>
+            OpenAiHttpClient.Configure(client, sp.GetRequiredService<IOptions<AiOptions>>().Value));
+
+        services.AddHttpClient(QdrantVectorStore.HttpClientName, (sp, client) =>
+        {
+            var qdrant = sp.GetRequiredService<IOptions<VectorStoreOptions>>().Value.Qdrant;
+            client.BaseAddress = new Uri(qdrant.Url.TrimEnd('/') + "/");
+            if (!string.IsNullOrWhiteSpace(qdrant.ApiKey))
+            {
+                client.DefaultRequestHeaders.Add("api-key", qdrant.ApiKey);
+            }
+        });
+
         // Providers are chosen when first resolved rather than while registering, so the
         // final configuration (including test and environment overrides) decides.
         services.AddSingleton<IEmbeddingClient>(sp =>
@@ -44,6 +57,7 @@ public static class ServiceCollectionExtensions
             return ai.Provider switch
             {
                 AiProvider.Offline => new HashingEmbeddingClient(ai.EmbeddingDimensions),
+                AiProvider.OpenAICompatible => ActivatorUtilities.CreateInstance<OpenAiCompatibleEmbeddingClient>(sp),
                 _ => throw new InvalidOperationException($"Unsupported AI provider '{ai.Provider}'."),
             };
         });
@@ -54,6 +68,7 @@ public static class ServiceCollectionExtensions
             return ai.Provider switch
             {
                 AiProvider.Offline => new ExtractiveChatClient(),
+                AiProvider.OpenAICompatible => ActivatorUtilities.CreateInstance<OpenAiCompatibleChatClient>(sp),
                 _ => throw new InvalidOperationException($"Unsupported AI provider '{ai.Provider}'."),
             };
         });
@@ -65,6 +80,7 @@ public static class ServiceCollectionExtensions
             return store.Provider switch
             {
                 VectorStoreProvider.InMemory => new InMemoryVectorStore(dimensions),
+                VectorStoreProvider.Qdrant => ActivatorUtilities.CreateInstance<QdrantVectorStore>(sp),
                 _ => throw new InvalidOperationException($"Unsupported vector store '{store.Provider}'."),
             };
         });
