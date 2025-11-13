@@ -1,9 +1,23 @@
+using System.Text.Json.Serialization;
+using DocumentIntelligence.Api.Endpoints;
+using DocumentIntelligence.Api.Ingestion;
+using DocumentIntelligence.Infrastructure;
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddDocumentIntelligence(builder.Configuration);
+builder.Services.AddBackgroundIngestion();
+builder.Services.AddProblemDetails();
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 var app = builder.Build();
 
-app.MapGet("/", () => Results.Redirect("/health/live"));
-app.MapGet("/health/live", () => Results.Ok(new { status = "Healthy" }));
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+
+app.MapDocumentEndpoints();
+app.MapQueryEndpoints();
 
 app.Run();
 

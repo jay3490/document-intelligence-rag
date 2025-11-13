@@ -33,7 +33,7 @@ public sealed partial class ExtractiveChatClient : IChatCompletionClient
 
         var questionTerms = TextAnalyzer.Terms(prompt.Question).ToHashSet(StringComparer.Ordinal);
 
-        var picked = prompt.Sources
+        var candidates = prompt.Sources
             .SelectMany(source => SentenceBreak().Split(source.Text)
                 .Select(sentence => sentence.Trim())
                 .Where(sentence => sentence.Length > 0)
@@ -45,13 +45,24 @@ public sealed partial class ExtractiveChatClient : IChatCompletionClient
                 Matches: TextAnalyzer.Terms(candidate.Sentence).Distinct(StringComparer.Ordinal).Count(questionTerms.Contains)))
             .Where(candidate => candidate.Matches > 0)
             .DistinctBy(candidate => candidate.Sentence, StringComparer.Ordinal)
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            return Task.FromResult(NotCoveredAnswer);
+        }
+
+        // Keep only sentences that match at least half as many question terms as the best
+        // one, so a single shared common word does not drag in unrelated sentences.
+        var best = candidates.Max(candidate => candidate.Matches);
+        var picked = candidates
+            .Where(candidate => candidate.Matches * 2 >= best)
             .OrderByDescending(candidate => candidate.Matches)
             .ThenBy(candidate => candidate.Order)
             .Take(MaxSentences)
-            .Select(candidate => $"{candidate.Sentence} [{candidate.Source}]")
-            .ToList();
+            .Select(candidate => $"{candidate.Sentence} [{candidate.Source}]");
 
-        return Task.FromResult(picked.Count == 0 ? NotCoveredAnswer : string.Join(" ", picked));
+        return Task.FromResult(string.Join(" ", picked));
     }
 
     [GeneratedRegex(@"(?<=[.!?])\s+|\n+")]

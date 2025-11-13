@@ -74,6 +74,24 @@ public sealed class Bm25Index
         }
     }
 
+    /// <summary>Summarises the indexed documents, ordered by name.</summary>
+    public IReadOnlyList<IndexedDocument> ListDocuments()
+    {
+        lock (_gate)
+        {
+            return _chunks.Values
+                .GroupBy(c => c.Chunk.DocumentId)
+                .Select(g => new IndexedDocument(
+                    g.Key,
+                    g.First().Chunk.DocumentName,
+                    g.Count(),
+                    g.Sum(c => c.Chunk.TokenCount)))
+                .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(d => d.Id)
+                .ToList();
+        }
+    }
+
     /// <returns>The number of chunks removed.</returns>
     public int RemoveDocument(Guid documentId)
     {

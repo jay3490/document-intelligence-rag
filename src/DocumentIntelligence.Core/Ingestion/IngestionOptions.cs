@@ -10,8 +10,8 @@ public sealed class IngestionOptions
     [Range(1, 2048)]
     public int EmbeddingBatchSize { get; set; } = 32;
 
-    /// <summary>Largest accepted upload, in bytes.</summary>
-    [Range(1, 100 * 1024 * 1024)]
+    /// <summary>Largest accepted upload, in bytes. Capped below Kestrel's default 30 MB body limit.</summary>
+    [Range(1, 25 * 1024 * 1024)]
     public int MaxDocumentBytes { get; set; } = 5 * 1024 * 1024;
 
     /// <summary>Uploads that may wait for the background worker before new ones are refused.</summary>
