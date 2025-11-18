@@ -73,7 +73,7 @@ public static partial class GroundedPrompt
             return false;
         }
 
-        var sources = SourcePattern().Matches(userMessage)
+        var sources = SourcePattern().Matches(userMessage[..question.Index])
             .Select(match => new PromptSource(
                 int.Parse(match.Groups["id"].Value, System.Globalization.CultureInfo.InvariantCulture),
                 UnescapeAttribute(match.Groups["title"].Value),
@@ -91,6 +91,7 @@ public static partial class GroundedPrompt
     [GeneratedRegex("<source id=\"(?<id>\\d+)\" title=\"(?<title>[^\"]*)\">\\n(?<text>.*?)\\n</source>", RegexOptions.Singleline)]
     private static partial Regex SourcePattern();
 
-    [GeneratedRegex("<question>\\n(?<question>.*?)\\n</question>\\s*$", RegexOptions.Singleline)]
+    // Right-to-left so the question block at the end wins over a look-alike inside a source.
+    [GeneratedRegex("<question>\\n(?<question>.*?)\\n</question>\\s*$", RegexOptions.Singleline | RegexOptions.RightToLeft)]
     private static partial Regex QuestionPattern();
 }

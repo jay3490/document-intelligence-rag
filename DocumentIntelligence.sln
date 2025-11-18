@@ -11,6 +11,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DocumentIntelligence.Infras
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DocumentIntelligence.Api", "src\DocumentIntelligence.Api\DocumentIntelligence.Api.csproj", "{7347B886-8F63-4B9B-A9A9-C05172EE744F}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{74867EA4-118E-49CF-B3D3-1C93A96AC242}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DocumentIntelligence.UnitTests", "tests\DocumentIntelligence.UnitTests\DocumentIntelligence.UnitTests.csproj", "{C0C57440-A8AF-420E-BF5A-54D9D58FDD0C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DocumentIntelligence.Api.Tests", "tests\DocumentIntelligence.Api.Tests\DocumentIntelligence.Api.Tests.csproj", "{AA257984-FFAB-4C96-A01D-CBE7130C6E7F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -32,10 +38,20 @@ Global
 		{7347B886-8F63-4B9B-A9A9-C05172EE744F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7347B886-8F63-4B9B-A9A9-C05172EE744F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7347B886-8F63-4B9B-A9A9-C05172EE744F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C0C57440-A8AF-420E-BF5A-54D9D58FDD0C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C0C57440-A8AF-420E-BF5A-54D9D58FDD0C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C0C57440-A8AF-420E-BF5A-54D9D58FDD0C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C0C57440-A8AF-420E-BF5A-54D9D58FDD0C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AA257984-FFAB-4C96-A01D-CBE7130C6E7F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AA257984-FFAB-4C96-A01D-CBE7130C6E7F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AA257984-FFAB-4C96-A01D-CBE7130C6E7F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AA257984-FFAB-4C96-A01D-CBE7130C6E7F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{0D2AA746-A51D-44FA-8463-0B6D94B285D2} = {1E40FEF8-1413-4310-B849-E2DDA3CCF92B}
 		{A998047E-4285-405D-ADC9-43EF31C4A6E9} = {1E40FEF8-1413-4310-B849-E2DDA3CCF92B}
 		{7347B886-8F63-4B9B-A9A9-C05172EE744F} = {1E40FEF8-1413-4310-B849-E2DDA3CCF92B}
+		{C0C57440-A8AF-420E-BF5A-54D9D58FDD0C} = {74867EA4-118E-49CF-B3D3-1C93A96AC242}
+		{AA257984-FFAB-4C96-A01D-CBE7130C6E7F} = {74867EA4-118E-49CF-B3D3-1C93A96AC242}
 	EndGlobalSection
 EndGlobal

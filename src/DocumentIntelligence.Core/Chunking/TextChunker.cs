@@ -138,19 +138,18 @@ public sealed partial class TextChunker
             yield break;
         }
 
-        var current = new StringBuilder();
-        var currentTokens = 0;
+        // Pieces are measured exactly. The buffer never grows past the budget, so each count
+        // stays cheap even though it is repeated for every word.
+        var current = string.Empty;
 
         foreach (var word in Whitespace().Split(sentence.Trim()))
         {
-            var wordTokens = _tokenCounter.CountTokens(word);
-            if (wordTokens > _maxTokens)
+            if (_tokenCounter.CountTokens(word) > _maxTokens)
             {
                 if (current.Length > 0)
                 {
-                    yield return current.ToString();
-                    current.Clear();
-                    currentTokens = 0;
+                    yield return current;
+                    current = string.Empty;
                 }
 
                 foreach (var slice in SliceOversizedWord(word))
@@ -161,26 +160,19 @@ public sealed partial class TextChunker
                 continue;
             }
 
-            var cost = current.Length == 0 ? wordTokens : currentTokens + 1 + wordTokens;
-            if (cost > _maxTokens)
+            var candidate = current.Length == 0 ? word : current + " " + word;
+            if (current.Length > 0 && _tokenCounter.CountTokens(candidate) > _maxTokens)
             {
-                yield return current.ToString();
-                current.Clear();
-                cost = wordTokens;
+                yield return current;
+                candidate = word;
             }
 
-            if (current.Length > 0)
-            {
-                current.Append(' ');
-            }
-
-            current.Append(word);
-            currentTokens = cost;
+            current = candidate;
         }
 
         if (current.Length > 0)
         {
-            yield return current.ToString();
+            yield return current;
         }
     }
 
