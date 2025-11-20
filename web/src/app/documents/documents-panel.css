@@ -1,0 +1,75 @@
+.dropzone {
+  display: block;
+  position: relative;
+  padding: 1.5rem 1rem;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dropzone:hover,
+.dropzone.dragging {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.dropzone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.list li div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: var(--border);
+}
+
+.badge.completed {
+  background: #d9f2e3;
+  color: #17643a;
+}
+
+.badge.failed {
+  background: #fbe0e0;
+  color: #8a1c1c;
+}
+
+.badge.processing,
+.badge.queued {
+  background: #fdf0d2;
+  color: #7a5200;
+}

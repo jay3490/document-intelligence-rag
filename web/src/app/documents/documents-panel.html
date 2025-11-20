@@ -1,0 +1,62 @@
+<section class="panel">
+  <h2>Documents</h2>
+
+  <label
+    class="dropzone"
+    [class.dragging]="dragging()"
+    (dragover)="onDragOver($event)"
+    (dragleave)="dragging.set(false)"
+    (drop)="onDrop($event)"
+  >
+    <input type="file" multiple [accept]="accept" (change)="onFilesSelected($event)" />
+    <span>{{ uploading() ? 'Uploading…' : 'Drop .md or .txt files here, or click to choose' }}</span>
+  </label>
+
+  @if (error(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+
+  <h3>Indexed</h3>
+  @if (documents().length === 0) {
+    <p class="muted">Nothing indexed yet.</p>
+  } @else {
+    <ul class="list">
+      @for (document of documents(); track document.id) {
+        <li>
+          <div>
+            <strong>{{ document.name }}</strong>
+            <span class="muted">{{ document.chunkCount }} chunks · {{ document.tokenCount | number }} tokens</span>
+          </div>
+          <button type="button" class="link" (click)="remove(document)" [attr.aria-label]="'Remove ' + document.name">
+            Remove
+          </button>
+        </li>
+      }
+    </ul>
+  }
+
+  <h3>Ingestion jobs</h3>
+  @if (jobs().length === 0) {
+    <p class="muted">No uploads in this session.</p>
+  } @else {
+    <ul class="list">
+      @for (job of jobs(); track job.id) {
+        <li>
+          <div>
+            <strong>{{ job.fileName }}</strong>
+            <span class="muted">
+              {{ job.createdAt | date: 'shortTime' }}
+              @if (job.chunkCount !== null) {
+                · {{ job.chunkCount }} chunks
+              }
+            </span>
+            @if (job.error) {
+              <span class="error">{{ job.error }}</span>
+            }
+          </div>
+          <span [class]="'badge ' + job.status.toLowerCase()">{{ job.status }}</span>
+        </li>
+      }
+    </ul>
+  }
+</section>
