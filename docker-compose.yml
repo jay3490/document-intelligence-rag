@@ -1,0 +1,62 @@
+# Offline by default: deterministic embeddings and extractive answers, no model required.
+# To use a local model instead:
+#   AI_PROVIDER=OpenAICompatible docker compose --profile ollama up --build
+# and pull the models once (see README).
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.2
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: src/DocumentIntelligence.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      VectorStore__Provider: Qdrant
+      VectorStore__Qdrant__Url: http://qdrant:6333
+      VectorStore__Qdrant__Collection: ${QDRANT_COLLECTION:-documents}
+      Ai__Provider: ${AI_PROVIDER:-Offline}
+      Ai__BaseUrl: ${AI_BASE_URL:-http://ollama:11434/v1}
+      Ai__ApiKey: ${AI_API_KEY:-}
+      Ai__ChatModel: ${AI_CHAT_MODEL:-llama3.2}
+      Ai__EmbeddingModel: ${AI_EMBEDDING_MODEL:-nomic-embed-text}
+      Ai__EmbeddingDimensions: ${AI_EMBEDDING_DIMENSIONS:-512}
+      # JSON logs for container log collectors.
+      Serilog__WriteTo__0__Name: Console
+      Serilog__WriteTo__0__Args__formatter: "Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact"
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    ports:
+      - "5080:8080"
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
+  web:
+    build:
+      context: web
+    environment:
+      API_BASE_URL: ""
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.40.10
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  qdrant-data:
+  ollama-data:
