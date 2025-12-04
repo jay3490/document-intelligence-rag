@@ -75,20 +75,27 @@ public sealed class Bm25Index
     }
 
     /// <summary>Summarises the indexed documents, ordered by name.</summary>
-    public IReadOnlyList<IndexedDocument> ListDocuments()
+    /// <param name="tenantId">Only documents of this tenant; null lists every tenant's documents.</param>
+    public IReadOnlyList<IndexedDocument> ListDocuments(string? tenantId = null)
     {
         lock (_gate)
         {
             return _chunks.Values
+                .Where(c => tenantId is null || c.Chunk.TenantId == tenantId)
                 .GroupBy(c => c.Chunk.DocumentId)
-                .Select(g => new IndexedDocument(
-                    g.Key,
-                    g.First().Chunk.DocumentName,
-                    g.Count(),
-                    g.Sum(c => c.Chunk.TokenCount)))
+                .Select(g => Summarise(g.Key, g.Select(c => c.Chunk).ToList()))
                 .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(d => d.Id)
                 .ToList();
+        }
+    }
+
+    /// <summary>The owning tenant of an indexed document, or null when the document is not indexed.</summary>
+    public string? FindDocumentTenant(Guid documentId)
+    {
+        lock (_gate)
+        {
+            return _chunks.Values.FirstOrDefault(c => c.Chunk.DocumentId == documentId)?.Chunk.TenantId;
         }
     }
 
@@ -111,7 +118,8 @@ public sealed class Bm25Index
         }
     }
 
-    public IReadOnlyList<ScoredChunk> Search(string query, int limit)
+    /// <param name="filter">When given, only chunks it matches are scored.</param>
+    public IReadOnlyList<ScoredChunk> Search(string query, int limit, SearchFilter? filter = null)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
@@ -140,6 +148,11 @@ public sealed class Bm25Index
                 foreach (var id in ids)
                 {
                     var indexed = _chunks[id];
+                    if (filter is not null && !filter.Matches(indexed.Chunk))
+                    {
+                        continue;
+                    }
+
                     double frequency = indexed.TermFrequencies[term];
                     var normaliser = _k1 * (1 - _b + (_b * indexed.Length / averageLength));
                     scores[id] = scores.GetValueOrDefault(id) + (idf * frequency * (_k1 + 1) / (frequency + normaliser));
@@ -154,6 +167,17 @@ public sealed class Bm25Index
                 .Take(limit)
                 .ToList();
         }
+    }
+
+    private static IndexedDocument Summarise(Guid documentId, IReadOnlyList<DocumentChunk> chunks)
+    {
+        var first = chunks[0];
+        return new IndexedDocument(documentId, first.DocumentName, chunks.Count, chunks.Sum(c => c.TokenCount))
+        {
+            Source = first.Metadata.Source,
+            Tags = first.Metadata.Tags,
+            Date = first.Metadata.Date,
+        };
     }
 
     private void RemoveChunk(Guid chunkId)

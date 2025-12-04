@@ -1,6 +1,7 @@
 using DocumentIntelligence.Core.Answering;
 using DocumentIntelligence.Core.Chat;
 using DocumentIntelligence.Core.Search;
+using DocumentIntelligence.Core.Tenancy;
 using DocumentIntelligence.Infrastructure.Offline;
 using DocumentIntelligence.Infrastructure.VectorStores;
 using DocumentIntelligence.UnitTests.TestDoubles;
@@ -82,12 +83,12 @@ public sealed class OfflineProviderTests
         var far = Chunks.Create("far");
         await store.UpsertAsync([new(far, [0f, 1f]), new(near, [1f, 0.1f])], CancellationToken.None);
 
-        var hits = await store.SearchAsync([1f, 0f], 10, CancellationToken.None);
+        var hits = await store.SearchAsync([1f, 0f], 10, new SearchFilter(TenantId.Default), CancellationToken.None);
         Assert.Equal(new[] { near.Id, far.Id }, hits.Select(h => h.Chunk.Id));
         Assert.Equal(0.0, hits[1].Score, precision: 6);
 
         await store.DeleteDocumentAsync(near.DocumentId, CancellationToken.None);
-        Assert.Equal(far.Id, Assert.Single(await store.SearchAsync([1f, 0f], 10, CancellationToken.None)).Chunk.Id);
+        Assert.Equal(far.Id, Assert.Single(await store.SearchAsync([1f, 0f], 10, new SearchFilter(TenantId.Default), CancellationToken.None)).Chunk.Id);
     }
 
     [Fact]

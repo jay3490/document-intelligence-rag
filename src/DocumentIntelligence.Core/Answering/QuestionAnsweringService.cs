@@ -15,13 +15,14 @@ public sealed partial class QuestionAnsweringService(
     public const string NothingIndexedAnswer =
         "There is no ingested content to answer from yet. Upload a document and try again.";
 
-    public async Task<AnswerResult> AnswerAsync(string question, int? topK, CancellationToken cancellationToken)
+    public async Task<AnswerResult> AnswerAsync(string question, int? topK, SearchFilter filter, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(question);
+        ArgumentNullException.ThrowIfNull(filter);
 
         using var activity = Telemetry.ActivitySource.StartActivity("answer question");
 
-        var sources = await retriever.RetrieveAsync(question, topK ?? options.Value.DefaultTopK, cancellationToken);
+        var sources = await retriever.RetrieveAsync(question, topK ?? options.Value.DefaultTopK, filter, cancellationToken);
         if (sources.Count == 0)
         {
             return new AnswerResult(NothingIndexedAnswer, []);

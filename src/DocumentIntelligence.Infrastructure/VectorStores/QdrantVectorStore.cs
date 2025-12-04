@@ -5,6 +5,7 @@ using DocumentIntelligence.Core;
 using DocumentIntelligence.Core.Documents;
 using DocumentIntelligence.Core.Search;
 using DocumentIntelligence.Core.Storage;
+using DocumentIntelligence.Core.Tenancy;
 using DocumentIntelligence.Infrastructure.Ai;
 using DocumentIntelligence.Infrastructure.Http;
 using Microsoft.Extensions.Logging;
@@ -14,8 +15,9 @@ namespace DocumentIntelligence.Infrastructure.VectorStores;
 
 /// <summary>
 /// Stores chunks as Qdrant points (cosine distance) through the REST API. The collection is
-/// created on first use, with a keyword payload index on <c>document_id</c> so that deleting a
-/// document is a filtered delete rather than a scan.
+/// created on first use, and payload indexes are ensured on <c>document_id</c> (filtered
+/// deletes), <c>tenant_id</c> (marked as the tenant key, so Qdrant groups each tenant's points)
+/// and the metadata fields searches filter on.
 /// </summary>
 public sealed partial class QdrantVectorStore : IVectorStore, IDisposable
 {
@@ -57,15 +59,16 @@ public sealed partial class QdrantVectorStore : IVectorStore, IDisposable
         await SendAsync<JsonElement>(HttpMethod.Put, $"collections/{_collection}/points?wait=true", new { points }, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<ScoredChunk>> SearchAsync(float[] vector, int limit, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ScoredChunk>> SearchAsync(float[] vector, int limit, SearchFilter filter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(vector);
+        ArgumentNullException.ThrowIfNull(filter);
         await EnsureCollectionAsync(cancellationToken);
 
         var response = await SendAsync<QueryResult>(
             HttpMethod.Post,
             $"collections/{_collection}/points/query",
-            new { query = vector, limit, with_payload = true },
+            new { query = vector, limit, with_payload = true, filter = QdrantFilters.Build(filter) },
             cancellationToken);
 
         return response.Points
@@ -77,11 +80,19 @@ public sealed partial class QdrantVectorStore : IVectorStore, IDisposable
     {
         await EnsureCollectionAsync(cancellationToken);
 
-        var filter = new { must = new[] { new { key = "document_id", match = new { value = documentId.ToString() } } } };
+        var filter = QdrantFilters.ForDocument(documentId);
         await SendAsync<JsonElement>(HttpMethod.Post, $"collections/{_collection}/points/delete?wait=true", new { filter }, cancellationToken);
     }
 
-    public async IAsyncEnumerable<DocumentChunk> ReadAllAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    public IAsyncEnumerable<DocumentChunk> ReadAllAsync(CancellationToken cancellationToken) =>
+        ScrollAsync(filter: null, cancellationToken);
+
+    public IAsyncEnumerable<DocumentChunk> ReadDocumentAsync(Guid documentId, CancellationToken cancellationToken) =>
+        ScrollAsync(QdrantFilters.ForDocument(documentId), cancellationToken);
+
+    public void Dispose() => _collectionGate.Dispose();
+
+    private async IAsyncEnumerable<DocumentChunk> ScrollAsync(object? filter, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await EnsureCollectionAsync(cancellationToken);
 
@@ -91,7 +102,7 @@ public sealed partial class QdrantVectorStore : IVectorStore, IDisposable
             var page = await SendAsync<ScrollResult>(
                 HttpMethod.Post,
                 $"collections/{_collection}/points/scroll",
-                new ScrollRequest(ScrollPageSize, offset, WithPayload: true, WithVector: false),
+                new ScrollRequest(ScrollPageSize, offset, WithPayload: true, WithVector: false, filter),
                 cancellationToken);
 
             foreach (var point in page.Points)
@@ -103,8 +114,6 @@ public sealed partial class QdrantVectorStore : IVectorStore, IDisposable
         }
         while (offset is not null);
     }
-
-    public void Dispose() => _collectionGate.Dispose();
 
     private async Task EnsureCollectionAsync(CancellationToken cancellationToken)
     {
@@ -137,6 +146,13 @@ public sealed partial class QdrantVectorStore : IVectorStore, IDisposable
                 }
             }
 
+            // Creating an index that already exists is a no-op, so collections created by an
+            // earlier version gain newer indexes as well.
+            foreach (var index in QdrantFilters.PayloadIndexes)
+            {
+                await SendAsync<JsonElement>(HttpMethod.Put, $"collections/{_collection}/index?wait=true", index, cancellationToken);
+            }
+
             _collectionReady = true;
         }
         finally
@@ -151,12 +167,6 @@ public sealed partial class QdrantVectorStore : IVectorStore, IDisposable
             HttpMethod.Put,
             $"collections/{_collection}",
             new { vectors = new { size = _dimensions, distance = "Cosine" } },
-            cancellationToken);
-
-        await SendAsync<JsonElement>(
-            HttpMethod.Put,
-            $"collections/{_collection}/index?wait=true",
-            new { field_name = "document_id", field_schema = "keyword" },
             cancellationToken);
 
         LogCollectionCreated(_logger, _collection, _dimensions);
@@ -201,16 +211,40 @@ public sealed partial class QdrantVectorStore : IVectorStore, IDisposable
             throw new UpstreamServiceException(Service, $"Point {id} is missing the chunk payload this store writes.");
         }
 
-        return new DocumentChunk(chunkId, documentId, payload.DocumentName, payload.ChunkIndex, payload.Section, payload.Text, payload.TokenCount);
+        return new DocumentChunk(chunkId, documentId, payload.DocumentName, payload.ChunkIndex, payload.Section, payload.Text, payload.TokenCount)
+        {
+            TenantId = payload.TenantId ?? TenantId.Default,
+            Metadata = new DocumentMetadata { Source = payload.Source, Tags = payload.Tags ?? [], Date = payload.Date },
+        };
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Created Qdrant collection {Collection} with {Dimensions} dimensions")]
     private static partial void LogCollectionCreated(ILogger logger, string collection, int dimensions);
 
-    private sealed record ChunkPayload(string DocumentId, string DocumentName, int ChunkIndex, string? Section, string Text, int TokenCount)
+    private sealed record ChunkPayload(
+        string DocumentId,
+        string DocumentName,
+        int ChunkIndex,
+        string? Section,
+        string Text,
+        int TokenCount,
+        string? TenantId,
+        string? Source,
+        IReadOnlyList<string>? Tags,
+        DateTimeOffset? Date)
     {
         public static ChunkPayload From(DocumentChunk chunk) =>
-            new(chunk.DocumentId.ToString(), chunk.DocumentName, chunk.ChunkIndex, chunk.Section, chunk.Text, chunk.TokenCount);
+            new(
+                chunk.DocumentId.ToString(),
+                chunk.DocumentName,
+                chunk.ChunkIndex,
+                chunk.Section,
+                chunk.Text,
+                chunk.TokenCount,
+                chunk.TenantId,
+                chunk.Metadata.Source,
+                chunk.Metadata.Tags,
+                chunk.Metadata.Date?.ToUniversalTime());
     }
 
     private sealed record Point(Guid Id, float[] Vector, ChunkPayload Payload);
@@ -221,7 +255,7 @@ public sealed partial class QdrantVectorStore : IVectorStore, IDisposable
 
     private sealed record QueryResult(IReadOnlyList<ScoredPoint> Points);
 
-    private sealed record ScrollRequest(int Limit, JsonElement? Offset, bool WithPayload, bool WithVector);
+    private sealed record ScrollRequest(int Limit, JsonElement? Offset, bool WithPayload, bool WithVector, object? Filter);
 
     private sealed record RecordPoint(JsonElement Id, ChunkPayload? Payload);
 

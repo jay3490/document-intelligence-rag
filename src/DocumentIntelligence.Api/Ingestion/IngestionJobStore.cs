@@ -13,11 +13,14 @@ public sealed class IngestionJobStore(TimeProvider timeProvider)
 
     private readonly ConcurrentDictionary<Guid, IngestionJob> _jobs = new();
 
-    public IngestionJob Create(Guid documentId, string fileName, long sizeBytes)
+    public IngestionJob Create(string tenantId, Guid documentId, string fileName, long sizeBytes)
     {
         var job = new IngestionJob(
             Guid.NewGuid(), documentId, fileName, sizeBytes, IngestionStatus.Queued,
-            ChunkCount: null, Error: null, timeProvider.GetUtcNow(), CompletedAt: null);
+            ChunkCount: null, Error: null, timeProvider.GetUtcNow(), CompletedAt: null)
+        {
+            TenantId = tenantId,
+        };
 
         _jobs[job.Id] = job;
         Trim();
@@ -26,9 +29,13 @@ public sealed class IngestionJobStore(TimeProvider timeProvider)
 
     public IngestionJob? Get(Guid id) => _jobs.GetValueOrDefault(id);
 
-    /// <summary>All retained jobs, newest first.</summary>
-    public IReadOnlyList<IngestionJob> List() =>
-        _jobs.Values.OrderByDescending(job => job.CreatedAt).ThenBy(job => job.Id).ToList();
+    /// <summary>A tenant's retained jobs, newest first.</summary>
+    public IReadOnlyList<IngestionJob> List(string tenantId) =>
+        _jobs.Values
+            .Where(job => job.TenantId == tenantId)
+            .OrderByDescending(job => job.CreatedAt)
+            .ThenBy(job => job.Id)
+            .ToList();
 
     public void Remove(Guid id) => _jobs.TryRemove(id, out _);
 

@@ -16,6 +16,12 @@ public sealed record DocumentChunk(
     string Text,
     int TokenCount)
 {
+    /// <summary>The tenant that owns the chunk; searches only ever see their own tenant's chunks.</summary>
+    public string TenantId { get; init; } = Tenancy.TenantId.Default;
+
+    /// <summary>The metadata of the document the chunk was cut from.</summary>
+    public DocumentMetadata Metadata { get; init; } = DocumentMetadata.None;
+
     /// <summary>
     /// The text used for embedding and keyword indexing. The section heading is prepended so
     /// that a chunk deep inside a section still matches queries that name the section.

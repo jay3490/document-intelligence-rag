@@ -1,6 +1,7 @@
 using DocumentIntelligence.Core.Answering;
 using DocumentIntelligence.Core.Search;
 using DocumentIntelligence.Core.Storage;
+using DocumentIntelligence.Core.Tenancy;
 using DocumentIntelligence.Infrastructure.Offline;
 using DocumentIntelligence.Infrastructure.VectorStores;
 using DocumentIntelligence.UnitTests.TestDoubles;
@@ -13,6 +14,8 @@ public sealed class QuestionAnsweringServiceTests
 {
     private const int Dimensions = 64;
 
+    private static readonly SearchFilter DefaultTenant = new(TenantId.Default);
+
     [Fact]
     public async Task Returns_only_the_sources_the_answer_cites()
     {
@@ -21,7 +24,7 @@ public sealed class QuestionAnsweringServiceTests
             Chunks.Create("Vacation is 25 days per year.", name: "leave.md"),
             Chunks.Create("Vacation requests need manager approval.", name: "process.md"));
 
-        var result = await service.AnswerAsync("How many vacation days?", topK: 2, CancellationToken.None);
+        var result = await service.AnswerAsync("How many vacation days?", topK: 2, DefaultTenant, CancellationToken.None);
 
         Assert.Equal("Employees get 25 days [2].", result.Answer);
         var citation = Assert.Single(result.Citations);
@@ -38,7 +41,7 @@ public sealed class QuestionAnsweringServiceTests
         var chat = new RecordingChatClient("unused");
         var service = await CreateServiceAsync(chat);
 
-        var result = await service.AnswerAsync("Anything?", topK: null, CancellationToken.None);
+        var result = await service.AnswerAsync("Anything?", topK: null, DefaultTenant, CancellationToken.None);
 
         Assert.Equal(QuestionAnsweringService.NothingIndexedAnswer, result.Answer);
         Assert.Empty(result.Citations);
@@ -52,7 +55,7 @@ public sealed class QuestionAnsweringServiceTests
         var chunks = Enumerable.Range(0, 6).Select(i => Chunks.Create($"budget line {i}", index: i)).ToArray();
         var service = await CreateServiceAsync(chat, chunks);
 
-        await service.AnswerAsync("budget", topK: null, CancellationToken.None);
+        await service.AnswerAsync("budget", topK: null, DefaultTenant, CancellationToken.None);
 
         Assert.True(GroundedPrompt.TryParse(chat.Calls[0][1].Content, out var parsed));
         Assert.Equal(3, parsed.Sources.Count);
@@ -76,7 +79,7 @@ public sealed class QuestionAnsweringServiceTests
             Options.Create(new RetrievalOptions()),
             NullLogger<QuestionAnsweringService>.Instance);
 
-        var result = await service.AnswerAsync("Who issues parking permits?", topK: 2, CancellationToken.None);
+        var result = await service.AnswerAsync("Who issues parking permits?", topK: 2, DefaultTenant, CancellationToken.None);
 
         Assert.StartsWith("Parking permits are issued by facilities.", result.Answer);
         Assert.Equal("parking.md", Assert.Single(result.Citations).DocumentName);

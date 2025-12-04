@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 using DocumentIntelligence.Api.Endpoints;
 using DocumentIntelligence.Api.Hosting;
 using DocumentIntelligence.Api.Ingestion;
+using DocumentIntelligence.Api.Tenancy;
+using DocumentIntelligence.Core.Tenancy;
 using DocumentIntelligence.Infrastructure;
 using Serilog;
 using Serilog.Events;
@@ -14,6 +16,7 @@ builder.AddTracing();
 
 builder.Services.AddDocumentIntelligence(builder.Configuration);
 builder.Services.AddBackgroundIngestion();
+builder.Services.AddSingleton<ITenantContext, DefaultTenantContext>();
 builder.Services.AddServiceHealthChecks();
 
 builder.Services.AddExceptionHandler<UpstreamServiceExceptionHandler>();

@@ -34,12 +34,14 @@ public sealed class InMemoryVectorStore : IVectorStore
         return Task.CompletedTask;
     }
 
-    public Task<IReadOnlyList<ScoredChunk>> SearchAsync(float[] vector, int limit, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<ScoredChunk>> SearchAsync(float[] vector, int limit, SearchFilter filter, CancellationToken cancellationToken)
     {
         EnsureDimensions(vector);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+        ArgumentNullException.ThrowIfNull(filter);
 
         IReadOnlyList<ScoredChunk> hits = _chunks.Values
+            .Where(stored => filter.Matches(stored.Chunk))
             .Select(stored => new ScoredChunk(stored.Chunk, CosineSimilarity(vector, stored.Vector)))
             .OrderByDescending(hit => hit.Score)
             .ThenBy(hit => hit.Chunk.DocumentName, StringComparer.Ordinal)
@@ -66,6 +68,21 @@ public sealed class InMemoryVectorStore : IVectorStore
     public async IAsyncEnumerable<DocumentChunk> ReadAllAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
         foreach (var stored in _chunks.Values)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return stored.Chunk;
+        }
+
+        await Task.CompletedTask;
+    }
+
+    public async IAsyncEnumerable<DocumentChunk> ReadDocumentAsync(Guid documentId, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var chunks = _chunks.Values
+            .Where(stored => stored.Chunk.DocumentId == documentId)
+            .OrderBy(stored => stored.Chunk.ChunkIndex);
+
+        foreach (var stored in chunks)
         {
             cancellationToken.ThrowIfCancellationRequested();
             yield return stored.Chunk;

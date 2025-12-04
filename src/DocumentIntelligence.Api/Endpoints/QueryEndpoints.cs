@@ -1,8 +1,9 @@
 using DocumentIntelligence.Core.Answering;
+using DocumentIntelligence.Core.Tenancy;
 
 namespace DocumentIntelligence.Api.Endpoints;
 
-public sealed record QueryRequest(string? Question, int? TopK);
+public sealed record QueryRequest(string? Question, int? TopK, QueryFilters? Filters = null);
 
 public static class QueryEndpoints
 {
@@ -13,7 +14,7 @@ public static class QueryEndpoints
     {
         app.MapPost("/api/query", QueryAsync)
             .WithTags("Query")
-            .WithSummary("Answer a question from the ingested documents, with citations.");
+            .WithSummary("Answer a question from the current tenant's documents, optionally filtered by tags, source and date.");
 
         return app;
     }
@@ -21,6 +22,7 @@ public static class QueryEndpoints
     private static async Task<IResult> QueryAsync(
         QueryRequest request,
         QuestionAnsweringService answering,
+        ITenantContext tenant,
         CancellationToken cancellationToken)
     {
         var errors = new Dictionary<string, string[]>();
@@ -39,12 +41,14 @@ public static class QueryEndpoints
             errors["topK"] = [$"topK must be between 1 and {MaxTopK}."];
         }
 
+        var filter = MetadataInput.ToSearchFilter(tenant.TenantId, request.Filters, errors);
+
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
         }
 
-        var result = await answering.AnswerAsync(request.Question!, request.TopK, cancellationToken);
+        var result = await answering.AnswerAsync(request.Question!, request.TopK, filter, cancellationToken);
         return Results.Ok(result);
     }
 }

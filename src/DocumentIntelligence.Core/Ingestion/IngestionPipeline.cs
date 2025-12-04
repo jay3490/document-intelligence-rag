@@ -27,6 +27,7 @@ public sealed partial class IngestionPipeline(
 
         using var activity = Telemetry.ActivitySource.StartActivity("ingest document");
         activity?.SetTag("document.id", document.Id);
+        activity?.SetTag("document.tenant", document.TenantId);
         activity?.SetTag("document.format", document.Format.ToString());
 
         var chunks = chunker.Chunk(document.Content, document.Format)
@@ -37,7 +38,11 @@ public sealed partial class IngestionPipeline(
                 c.Index,
                 c.Section,
                 c.Text,
-                c.TokenCount))
+                c.TokenCount)
+            {
+                TenantId = document.TenantId,
+                Metadata = document.Metadata,
+            })
             .ToList();
 
         await RemoveAsync(document.Id, cancellationToken);

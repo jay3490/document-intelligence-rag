@@ -18,4 +18,7 @@ public sealed record IngestionJob(
     int? ChunkCount,
     string? Error,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt)
+{
+    public string TenantId { get; init; } = Core.Tenancy.TenantId.Default;
+}

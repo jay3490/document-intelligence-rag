@@ -24,17 +24,19 @@ public sealed partial class HybridRetriever(
 {
     private readonly RetrievalOptions _options = options.Value;
 
-    public async Task<IReadOnlyList<RetrievedChunk>> RetrieveAsync(string query, int topK, CancellationToken cancellationToken)
+    /// <param name="filter">Restricts both retrievers to one tenant and the requested metadata.</param>
+    public async Task<IReadOnlyList<RetrievedChunk>> RetrieveAsync(string query, int topK, SearchFilter filter, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(topK);
+        ArgumentNullException.ThrowIfNull(filter);
 
         using var activity = Telemetry.ActivitySource.StartActivity("retrieve");
         var candidates = Math.Max(topK, _options.CandidatesPerRetriever);
 
         var embeddings = await embeddingClient.EmbedAsync([query], cancellationToken);
-        var vectorHits = await vectorStore.SearchAsync(embeddings[0], candidates, cancellationToken);
-        var keywordHits = keywordIndex.Search(query, candidates);
+        var vectorHits = await vectorStore.SearchAsync(embeddings[0], candidates, filter, cancellationToken);
+        var keywordHits = keywordIndex.Search(query, candidates, filter);
 
         var chunksById = new Dictionary<Guid, DocumentChunk>();
         foreach (var hit in vectorHits.Concat(keywordHits))
@@ -53,6 +55,7 @@ public sealed partial class HybridRetriever(
             .Select(fused => new RetrievedChunk(chunksById[fused.Key], fused.Score, fused.Ranks[0], fused.Ranks[1]))
             .ToList();
 
+        activity?.SetTag("retrieval.filtered", filter.HasMetadataConditions);
         activity?.SetTag("retrieval.vector_hits", vectorHits.Count);
         activity?.SetTag("retrieval.keyword_hits", keywordHits.Count);
         activity?.SetTag("retrieval.results", results.Count);
