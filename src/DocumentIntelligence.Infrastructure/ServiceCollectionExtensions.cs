@@ -34,6 +34,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Bm25Index>();
         services.AddSingleton<HybridRetriever>();
         services.AddSingleton<QuestionAnsweringService>();
+        services.AddSingleton<IReranker>(sp =>
+        {
+            var retrieval = sp.GetRequiredService<IOptions<RetrievalOptions>>().Value;
+            var ai = sp.GetRequiredService<IOptions<AiOptions>>().Value;
+            return retrieval.Reranker switch
+            {
+                RerankerKind.None => new NoOpReranker(),
+                RerankerKind.Llm when ai.Provider == AiProvider.Offline => throw new InvalidOperationException(
+                    $"{RetrievalOptions.SectionName}:{nameof(RetrievalOptions.Reranker)} = Llm needs a chat model; set {AiOptions.SectionName}:{nameof(AiOptions.Provider)} to OpenAICompatible."),
+                RerankerKind.Llm => ActivatorUtilities.CreateInstance<LlmReranker>(sp),
+                _ => throw new InvalidOperationException($"Unsupported reranker '{retrieval.Reranker}'."),
+            };
+        });
         services.AddSingleton<IngestionPipeline>();
 
         services.AddHttpClient(OpenAiHttpClient.Name, (sp, client) =>

@@ -75,6 +75,7 @@ public sealed class QuestionAnsweringServiceTests
         await IndexAsync(store, keywordIndex, embeddings, chunks);
         var service = new QuestionAnsweringService(
             new HybridRetriever(embeddings, store, keywordIndex, Options.Create(new RetrievalOptions()), NullLogger<HybridRetriever>.Instance),
+            new NoOpReranker(),
             new ExtractiveChatClient(),
             Options.Create(new RetrievalOptions()),
             NullLogger<QuestionAnsweringService>.Instance);
@@ -95,6 +96,7 @@ public sealed class QuestionAnsweringServiceTests
         var options = Options.Create(new RetrievalOptions { DefaultTopK = 3 });
         return new QuestionAnsweringService(
             new HybridRetriever(embeddings, store, keywordIndex, options, NullLogger<HybridRetriever>.Instance),
+            new NoOpReranker(),
             chat,
             options,
             NullLogger<QuestionAnsweringService>.Instance);

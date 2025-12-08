@@ -8,6 +8,7 @@ namespace DocumentIntelligence.Core.Answering;
 /// <summary>Answers a question from the ingested documents and reports which chunks it cited.</summary>
 public sealed partial class QuestionAnsweringService(
     HybridRetriever retriever,
+    IReranker reranker,
     IChatCompletionClient chatClient,
     IOptions<RetrievalOptions> options,
     ILogger<QuestionAnsweringService> logger)
@@ -22,7 +23,13 @@ public sealed partial class QuestionAnsweringService(
 
         using var activity = Telemetry.ActivitySource.StartActivity("answer question");
 
-        var sources = await retriever.RetrieveAsync(question, topK ?? options.Value.DefaultTopK, filter, cancellationToken);
+        var settings = options.Value;
+        var k = topK ?? settings.DefaultTopK;
+
+        // With a reranker, retrieve a wider pool and let it choose the final top-k.
+        var reranking = settings.Reranker != RerankerKind.None;
+        var candidates = await retriever.RetrieveAsync(question, reranking ? Math.Max(k, settings.RerankCandidates) : k, filter, cancellationToken);
+        var sources = reranking ? await reranker.RerankAsync(question, candidates, k, cancellationToken) : candidates;
         if (sources.Count == 0)
         {
             return new AnswerResult(NothingIndexedAnswer, []);
