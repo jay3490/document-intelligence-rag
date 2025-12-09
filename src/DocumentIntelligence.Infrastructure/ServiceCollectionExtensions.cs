@@ -6,6 +6,7 @@ using DocumentIntelligence.Core.Ingestion;
 using DocumentIntelligence.Core.Search;
 using DocumentIntelligence.Core.Storage;
 using DocumentIntelligence.Infrastructure.Ai;
+using DocumentIntelligence.Infrastructure.Caching;
 using DocumentIntelligence.Infrastructure.Offline;
 using DocumentIntelligence.Infrastructure.Tokenization;
 using DocumentIntelligence.Infrastructure.VectorStores;
@@ -34,6 +35,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Bm25Index>();
         services.AddSingleton<HybridRetriever>();
         services.AddSingleton<QuestionAnsweringService>();
+        services.AddSingleton<CachedQuestionAnswering>();
+        AddQueryCache(services, configuration);
         services.AddSingleton<IReranker>(sp =>
         {
             var retrieval = sp.GetRequiredService<IOptions<RetrievalOptions>>().Value;
@@ -99,6 +102,28 @@ public static class ServiceCollectionExtensions
         });
 
         return services;
+    }
+
+    private static void AddQueryCache(IServiceCollection services, IConfiguration configuration)
+    {
+        AddValidatedOptions<QueryCacheOptions>(services, configuration, QueryCacheOptions.SectionName);
+
+        // The backing store has to be chosen while registering, so read the setting directly.
+        var settings = configuration.GetSection(QueryCacheOptions.SectionName).Get<QueryCacheOptions>() ?? new QueryCacheOptions();
+        switch (settings.Provider)
+        {
+            case QueryCacheProvider.None:
+                services.AddSingleton<IQueryResultCache, NoQueryResultCache>();
+                return;
+            case QueryCacheProvider.Redis:
+                services.AddStackExchangeRedisCache(redis => redis.Configuration = settings.RedisConnection);
+                break;
+            default:
+                services.AddDistributedMemoryCache();
+                break;
+        }
+
+        services.AddSingleton<IQueryResultCache, DistributedQueryResultCache>();
     }
 
     private static void AddValidatedOptions<TOptions>(IServiceCollection services, IConfiguration configuration, string section)

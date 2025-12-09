@@ -1,5 +1,6 @@
 using System.Text;
 using DocumentIntelligence.Api.Ingestion;
+using DocumentIntelligence.Core.Answering;
 using DocumentIntelligence.Core.Documents;
 using DocumentIntelligence.Core.Ingestion;
 using DocumentIntelligence.Core.Search;
@@ -115,6 +116,7 @@ public static class DocumentEndpoints
         IngestionPipeline pipeline,
         Bm25Index index,
         ITenantContext tenant,
+        IQueryResultCache queryCache,
         KeywordIndexInitializer keywordIndexInitializer,
         CancellationToken cancellationToken)
     {
@@ -134,6 +136,7 @@ public static class DocumentEndpoints
         }
 
         await pipeline.RemoveAsync(documentId, cancellationToken);
+        await queryCache.InvalidateTenantAsync(tenant.TenantId, cancellationToken);
         return Results.NoContent();
     }
 

@@ -1,4 +1,5 @@
 using DocumentIntelligence.Core;
+using DocumentIntelligence.Core.Answering;
 using DocumentIntelligence.Core.Ingestion;
 
 namespace DocumentIntelligence.Api.Ingestion;
@@ -12,6 +13,7 @@ public sealed partial class IngestionWorker(
     IngestionQueue queue,
     IngestionJobStore jobs,
     IngestionPipeline pipeline,
+    IQueryResultCache queryCache,
     KeywordIndexInitializer keywordIndexInitializer,
     ILogger<IngestionWorker> logger) : BackgroundService
 {
@@ -25,6 +27,8 @@ public sealed partial class IngestionWorker(
             try
             {
                 var chunkCount = await pipeline.IngestAsync(item.Document, stoppingToken);
+                // Invalidate first, so a client that sees "Completed" never gets a stale answer.
+                await queryCache.InvalidateTenantAsync(item.Document.TenantId, stoppingToken);
                 jobs.MarkCompleted(item.JobId, chunkCount);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

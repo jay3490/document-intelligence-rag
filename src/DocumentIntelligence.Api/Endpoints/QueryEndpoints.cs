@@ -10,6 +10,9 @@ public static class QueryEndpoints
     public const int MaxQuestionLength = 2000;
     public const int MaxTopK = 20;
 
+    /// <summary>Response header that says whether the answer came from the query cache.</summary>
+    public const string CacheHeader = "X-Cache";
+
     public static IEndpointRouteBuilder MapQueryEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/api/query", QueryAsync)
@@ -21,7 +24,8 @@ public static class QueryEndpoints
 
     private static async Task<IResult> QueryAsync(
         QueryRequest request,
-        QuestionAnsweringService answering,
+        CachedQuestionAnswering answering,
+        HttpResponse response,
         ITenantContext tenant,
         CancellationToken cancellationToken)
     {
@@ -48,7 +52,8 @@ public static class QueryEndpoints
             return Results.ValidationProblem(errors);
         }
 
-        var result = await answering.AnswerAsync(request.Question!, request.TopK, filter, cancellationToken);
-        return Results.Ok(result);
+        var answer = await answering.AnswerAsync(request.Question!, request.TopK, filter, cancellationToken);
+        response.Headers[CacheHeader] = answer.FromCache ? "hit" : "miss";
+        return Results.Ok(answer.Result);
     }
 }
