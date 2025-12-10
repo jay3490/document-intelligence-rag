@@ -6,6 +6,7 @@ using DocumentIntelligence.Core.Ingestion;
 using DocumentIntelligence.Core.Search;
 using DocumentIntelligence.Core.Storage;
 using DocumentIntelligence.Infrastructure.Ai;
+using DocumentIntelligence.Infrastructure.Blobs;
 using DocumentIntelligence.Infrastructure.Caching;
 using DocumentIntelligence.Infrastructure.Offline;
 using DocumentIntelligence.Infrastructure.Tokenization;
@@ -86,6 +87,18 @@ public static class ServiceCollectionExtensions
                 AiProvider.Offline => new ExtractiveChatClient(),
                 AiProvider.OpenAICompatible => ActivatorUtilities.CreateInstance<OpenAiCompatibleChatClient>(sp),
                 _ => throw new InvalidOperationException($"Unsupported AI provider '{ai.Provider}'."),
+            };
+        });
+
+        AddValidatedOptions<BlobStorageOptions>(services, configuration, BlobStorageOptions.SectionName);
+        services.AddSingleton<IBlobStore>(sp =>
+        {
+            var blobs = sp.GetRequiredService<IOptions<BlobStorageOptions>>().Value;
+            return blobs.Provider switch
+            {
+                BlobStorageProvider.FileSystem => ActivatorUtilities.CreateInstance<FileSystemBlobStore>(sp),
+                BlobStorageProvider.AzureBlob => ActivatorUtilities.CreateInstance<AzureBlobStore>(sp, sp.GetRequiredService<IOptions<BlobStorageOptions>>()),
+                _ => throw new InvalidOperationException($"Unsupported blob storage provider '{blobs.Provider}'."),
             };
         });
 
