@@ -7,7 +7,6 @@ public static class IngestionServiceCollectionExtensions
     {
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IngestionQueue>();
-        services.AddSingleton<IngestionJobStore>();
         services.AddSingleton<KeywordIndexInitializer>();
         services.AddHostedService(sp => sp.GetRequiredService<KeywordIndexInitializer>());
         services.AddHostedService<IngestionWorker>();

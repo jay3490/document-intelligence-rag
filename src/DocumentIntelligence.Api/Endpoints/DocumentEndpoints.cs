@@ -1,9 +1,11 @@
+using System.Security.Cryptography;
 using System.Text;
 using DocumentIntelligence.Api.Ingestion;
 using DocumentIntelligence.Core.Answering;
 using DocumentIntelligence.Core.Documents;
 using DocumentIntelligence.Core.Ingestion;
 using DocumentIntelligence.Core.Search;
+using DocumentIntelligence.Core.Storage;
 using DocumentIntelligence.Core.Tenancy;
 using Microsoft.Extensions.Options;
 
@@ -11,6 +13,8 @@ namespace DocumentIntelligence.Api.Endpoints;
 
 public static class DocumentEndpoints
 {
+    public const int MaxListedJobs = 100;
+
     public static IEndpointRouteBuilder MapDocumentEndpoints(this IEndpointRouteBuilder app)
     {
         var documents = app.MapGroup("/api/documents").WithTags("Documents");
@@ -27,11 +31,12 @@ public static class DocumentEndpoints
 
         var ingestions = app.MapGroup("/api/ingestions").WithTags("Ingestion");
 
-        ingestions.MapGet("/", (IngestionJobStore jobs, ITenantContext tenant) => Results.Ok(jobs.List(tenant.TenantId)))
+        ingestions.MapGet("/", async (IIngestionJobStore jobs, ITenantContext tenant, CancellationToken cancellationToken) =>
+                Results.Ok(await jobs.ListAsync(tenant.TenantId, MaxListedJobs, cancellationToken)))
             .WithSummary("List the current tenant's recent ingestion jobs, newest first.");
 
-        ingestions.MapGet("/{jobId:guid}", (Guid jobId, IngestionJobStore jobs, ITenantContext tenant) =>
-                jobs.Get(jobId) is { } job && job.TenantId == tenant.TenantId
+        ingestions.MapGet("/{jobId:guid}", async (Guid jobId, IIngestionJobStore jobs, ITenantContext tenant, CancellationToken cancellationToken) =>
+                await jobs.GetAsync(jobId, cancellationToken) is { } job && job.TenantId == tenant.TenantId
                     ? Results.Ok(job)
                     : Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Ingestion job not found"))
             .WithName("GetIngestionJob")
@@ -43,7 +48,8 @@ public static class DocumentEndpoints
     private static async Task<IResult> UploadAsync(
         HttpRequest request,
         IngestionQueue queue,
-        IngestionJobStore jobs,
+        IIngestionJobStore jobs,
+        IBlobStore blobs,
         ITenantContext tenant,
         TimeProvider timeProvider,
         IOptions<IngestionOptions> options,
@@ -97,11 +103,31 @@ public static class DocumentEndpoints
             TenantId = tenant.TenantId,
             Metadata = metadata,
         };
-        var job = jobs.Create(tenant.TenantId, document.Id, fileName, file.Length);
+        var bytes = Encoding.UTF8.GetBytes(content);
+        var blobName = BlobNames.ForDocument(tenant.TenantId, document.Id, fileName);
+        using (var stream = new MemoryStream(bytes, writable: false))
+        {
+            await blobs.PutAsync(blobName, stream, cancellationToken);
+        }
+
+        var job = await jobs.AddAsync(
+            new IngestionJob
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenant.TenantId,
+                DocumentId = document.Id,
+                FileName = fileName,
+                SizeBytes = file.Length,
+                ContentHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
+                BlobName = blobName,
+                CreatedAt = timeProvider.GetUtcNow(),
+            },
+            cancellationToken);
 
         if (!queue.TryEnqueue(new IngestionWorkItem(job.Id, document)))
         {
-            jobs.Remove(job.Id);
+            await jobs.DeleteAsync(job.Id, CancellationToken.None);
+            await blobs.DeleteAsync(blobName, CancellationToken.None);
             return Results.Problem(
                 statusCode: StatusCodes.Status503ServiceUnavailable,
                 title: "Ingestion queue is full",
@@ -117,6 +143,7 @@ public static class DocumentEndpoints
         Bm25Index index,
         ITenantContext tenant,
         IQueryResultCache queryCache,
+        IIngestionJobStore jobs,
         KeywordIndexInitializer keywordIndexInitializer,
         CancellationToken cancellationToken)
     {
@@ -136,6 +163,7 @@ public static class DocumentEndpoints
         }
 
         await pipeline.RemoveAsync(documentId, cancellationToken);
+        await jobs.MarkDocumentRemovedAsync(documentId, cancellationToken);
         await queryCache.InvalidateTenantAsync(tenant.TenantId, cancellationToken);
         return Results.NoContent();
     }

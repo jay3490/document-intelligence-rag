@@ -11,7 +11,7 @@ namespace DocumentIntelligence.Api.Ingestion;
 /// </summary>
 public sealed partial class IngestionWorker(
     IngestionQueue queue,
-    IngestionJobStore jobs,
+    IIngestionJobStore jobs,
     IngestionPipeline pipeline,
     IQueryResultCache queryCache,
     KeywordIndexInitializer keywordIndexInitializer,
@@ -23,28 +23,32 @@ public sealed partial class IngestionWorker(
 
         await foreach (var item in queue.ReadAllAsync(stoppingToken))
         {
-            jobs.MarkProcessing(item.JobId);
+            if (!await jobs.TryStartAttemptAsync(item.JobId, stoppingToken))
+            {
+                continue;
+            }
+
             try
             {
                 var chunkCount = await pipeline.IngestAsync(item.Document, stoppingToken);
                 // Invalidate first, so a client that sees "Completed" never gets a stale answer.
                 await queryCache.InvalidateTenantAsync(item.Document.TenantId, stoppingToken);
-                jobs.MarkCompleted(item.JobId, chunkCount);
+                await jobs.MarkCompletedAsync(item.JobId, chunkCount, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
-                jobs.MarkFailed(item.JobId, "The service stopped before ingestion finished.");
+                await jobs.MarkFailedAsync(item.JobId, "The service stopped before ingestion finished.", CancellationToken.None);
                 throw;
             }
             catch (UpstreamServiceException exception)
             {
                 LogFailed(logger, exception, item.Document.Name, item.JobId);
-                jobs.MarkFailed(item.JobId, exception.Message);
+                await jobs.MarkFailedAsync(item.JobId, exception.Message, stoppingToken);
             }
             catch (Exception exception)
             {
                 LogFailed(logger, exception, item.Document.Name, item.JobId);
-                jobs.MarkFailed(item.JobId, "Ingestion failed unexpectedly. See the service logs for details.");
+                await jobs.MarkFailedAsync(item.JobId, "Ingestion failed unexpectedly. See the service logs for details.", stoppingToken);
             }
         }
     }

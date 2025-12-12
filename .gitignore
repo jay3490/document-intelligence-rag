@@ -24,3 +24,6 @@ Thumbs.db
 
 # Local environment
 .env
+
+# Local runtime data (SQLite job database, filesystem blob store)
+src/*/data/

@@ -6,6 +6,7 @@ using DocumentIntelligence.Api.Ingestion;
 using DocumentIntelligence.Api.Tenancy;
 using DocumentIntelligence.Core.Tenancy;
 using DocumentIntelligence.Infrastructure;
+using DocumentIntelligence.Infrastructure.Persistence;
 using Serilog;
 using Serilog.Events;
 
@@ -15,6 +16,7 @@ builder.AddStructuredLogging();
 builder.AddTracing();
 
 builder.Services.AddDocumentIntelligence(builder.Configuration);
+builder.Services.AddIngestionJobPersistence(builder.Configuration);
 builder.Services.AddBackgroundIngestion();
 builder.Services.AddSingleton<ITenantContext, DefaultTenantContext>();
 builder.Services.AddServiceHealthChecks();

@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using DocumentIntelligence.Api.Ingestion;
+using DocumentIntelligence.Core.Ingestion;
 using DocumentIntelligence.Core.Search;
 
 namespace DocumentIntelligence.Api.Tests;

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DocumentIntelligence.Api.Ingestion;
+using DocumentIntelligence.Infrastructure.Persistence;
 using DocumentIntelligence.Infrastructure.VectorStores;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -16,13 +17,14 @@ public static class HealthEndpoints
     {
         services.AddHealthChecks()
             .AddCheck<VectorStoreHealthCheck>("vector-store", tags: [ReadyTag])
-            .AddCheck<KeywordIndexHealthCheck>("keyword-index", tags: [ReadyTag]);
+            .AddCheck<KeywordIndexHealthCheck>("keyword-index", tags: [ReadyTag])
+            .AddDbContextCheck<IngestionDbContext>("job-database", tags: [ReadyTag]);
         return services;
     }
 
     /// <summary>
     /// <c>/health/live</c> only shows the process is serving requests; <c>/health/ready</c>
-    /// also checks the vector store and that the keyword index has been rebuilt.
+    /// also checks the vector store, the job database and that the keyword index has been rebuilt.
     /// </summary>
     public static IEndpointRouteBuilder MapServiceHealthChecks(this IEndpointRouteBuilder app)
     {

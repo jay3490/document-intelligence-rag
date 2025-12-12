@@ -23,7 +23,7 @@ public sealed class HealthApiTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Readiness_reports_the_vector_store_and_keyword_index()
+    public async Task Readiness_reports_the_vector_store_job_database_and_keyword_index()
     {
         using var client = _factory.CreateClient();
 
@@ -48,7 +48,7 @@ public sealed class HealthApiTests : IClassFixture<ApiFactory>
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             Assert.Equal(
-                new[] { "keyword-index", "vector-store" },
+                new[] { "job-database", "keyword-index", "vector-store" },
                 body.RootElement.GetProperty("checks").EnumerateArray().Select(c => c.GetProperty("name").GetString()).Order());
         }
     }
