@@ -44,6 +44,29 @@ public sealed class DocumentApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Uploading_identical_content_again_is_recorded_as_a_duplicate()
+    {
+        var first = await _client.IngestAsync("a.md", "Exactly the same text.");
+
+        var second = await _client.IngestAsync("copy.md", "Exactly the same text.");
+
+        Assert.Equal(IngestionStatus.Duplicate, second.Status);
+        Assert.Equal(first.DocumentId, second.DuplicateOfDocumentId);
+        Assert.Single((await _client.GetFromJsonAsync<List<IndexedDocument>>("/api/documents", ApiFactory.Json))!);
+    }
+
+    [Fact]
+    public async Task Content_can_be_uploaded_again_after_its_document_was_deleted()
+    {
+        var first = await _client.IngestAsync("a.md", "Exactly the same text.");
+        (await _client.DeleteAsync($"/api/documents/{first.DocumentId}")).EnsureSuccessStatusCode();
+
+        var second = await _client.IngestAsync("a.md", "Exactly the same text.");
+
+        Assert.Equal(IngestionStatus.Completed, second.Status);
+    }
+
+    [Fact]
     public async Task Deleting_a_document_removes_it_from_the_index()
     {
         var job = await _client.IngestAsync("temp.txt", "Temporary text.");

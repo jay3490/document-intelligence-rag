@@ -1,4 +1,5 @@
 using DocumentIntelligence.Core.Documents;
+using DocumentIntelligence.Core.Ingestion;
 using DocumentIntelligence.Core.Search;
 using DocumentIntelligence.Core.Storage;
 
@@ -11,7 +12,7 @@ namespace DocumentIntelligence.Api.Ingestion;
 public sealed partial class KeywordIndexInitializer(
     IVectorStore vectorStore,
     Bm25Index keywordIndex,
-    ILogger<KeywordIndexInitializer> logger) : BackgroundService
+    ILogger<KeywordIndexInitializer> logger) : BackgroundService, IIngestionReadiness
 {
     private const int BatchSize = 512;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);

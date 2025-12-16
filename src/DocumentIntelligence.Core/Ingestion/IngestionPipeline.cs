@@ -16,7 +16,7 @@ public sealed partial class IngestionPipeline(
     TextChunker chunker,
     IEmbeddingClient embeddingClient,
     IVectorStore vectorStore,
-    Bm25Index keywordIndex,
+    IKeywordIndexWriter keywordIndex,
     IOptions<IngestionOptions> options,
     ILogger<IngestionPipeline> logger)
 {

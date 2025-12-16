@@ -10,7 +10,7 @@ namespace DocumentIntelligence.Core.Search;
 /// keeps re-ingestion and start-up rebuilds idempotent. IDF uses the non-negative variant
 /// <c>ln(1 + (N - df + 0.5) / (df + 0.5))</c> so very common terms never subtract score.
 /// </remarks>
-public sealed class Bm25Index
+public sealed class Bm25Index : IKeywordIndexWriter
 {
     private readonly object _gate = new();
     private readonly Dictionary<Guid, IndexedChunk> _chunks = [];

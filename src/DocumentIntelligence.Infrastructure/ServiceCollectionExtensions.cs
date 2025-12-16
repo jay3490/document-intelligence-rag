@@ -13,6 +13,7 @@ using DocumentIntelligence.Infrastructure.Tokenization;
 using DocumentIntelligence.Infrastructure.VectorStores;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace DocumentIntelligence.Infrastructure;
@@ -34,6 +35,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITokenCounter, TiktokenTokenCounter>();
         services.AddSingleton<TextChunker>();
         services.AddSingleton<Bm25Index>();
+        services.TryAddSingleton<IKeywordIndexWriter>(sp => sp.GetRequiredService<Bm25Index>());
         services.AddSingleton<HybridRetriever>();
         services.AddSingleton<QuestionAnsweringService>();
         services.AddSingleton<CachedQuestionAnswering>();

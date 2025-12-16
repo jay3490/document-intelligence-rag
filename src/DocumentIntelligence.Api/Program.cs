@@ -17,7 +17,7 @@ builder.AddTracing();
 
 builder.Services.AddDocumentIntelligence(builder.Configuration);
 builder.Services.AddIngestionJobPersistence(builder.Configuration);
-builder.Services.AddBackgroundIngestion();
+builder.Services.AddBackgroundIngestion(builder.Configuration);
 builder.Services.AddSingleton<ITenantContext, DefaultTenantContext>();
 builder.Services.AddServiceHealthChecks();
 

@@ -4,6 +4,7 @@ using DocumentIntelligence.Api.Ingestion;
 using DocumentIntelligence.Core.Answering;
 using DocumentIntelligence.Core.Documents;
 using DocumentIntelligence.Core.Ingestion;
+using DocumentIntelligence.Core.Messaging;
 using DocumentIntelligence.Core.Search;
 using DocumentIntelligence.Core.Storage;
 using DocumentIntelligence.Core.Tenancy;
@@ -47,7 +48,7 @@ public static class DocumentEndpoints
 
     private static async Task<IResult> UploadAsync(
         HttpRequest request,
-        IngestionQueue queue,
+        IIngestionEventPublisher publisher,
         IIngestionJobStore jobs,
         IBlobStore blobs,
         ITenantContext tenant,
@@ -69,7 +70,7 @@ public static class DocumentEndpoints
         }
 
         var fileName = Path.GetFileName(file.FileName);
-        if (!DocumentFormats.TryFromFileName(fileName, out var format))
+        if (!DocumentFormats.TryFromFileName(fileName, out _))
         {
             return Invalid("file", $"Unsupported file type. Supported extensions: {string.Join(", ", DocumentFormats.SupportedExtensions)}.");
         }
@@ -98,40 +99,49 @@ public static class DocumentEndpoints
             return Invalid("file", "The file contains no text.");
         }
 
-        var document = new SourceDocument(Guid.NewGuid(), fileName, format, content)
-        {
-            TenantId = tenant.TenantId,
-            Metadata = metadata,
-        };
+        // The raw content goes to the blob store; the message only carries a reference to it.
         var bytes = Encoding.UTF8.GetBytes(content);
-        var blobName = BlobNames.ForDocument(tenant.TenantId, document.Id, fileName);
+        var documentId = Guid.NewGuid();
+        var message = new DocumentUploaded
+        {
+            JobId = Guid.NewGuid(),
+            TenantId = tenant.TenantId,
+            DocumentId = documentId,
+            FileName = fileName,
+            BlobName = BlobNames.ForDocument(tenant.TenantId, documentId, fileName),
+            ContentHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
+            SizeBytes = file.Length,
+            Source = metadata.Source,
+            Tags = metadata.Tags,
+            Date = metadata.Date,
+            UploadedAt = timeProvider.GetUtcNow(),
+            CorrelationId = request.HttpContext.TraceIdentifier,
+        };
+
         using (var stream = new MemoryStream(bytes, writable: false))
         {
-            await blobs.PutAsync(blobName, stream, cancellationToken);
+            await blobs.PutAsync(message.BlobName, stream, cancellationToken);
         }
 
-        var job = await jobs.AddAsync(
-            new IngestionJob
-            {
-                Id = Guid.NewGuid(),
-                TenantId = tenant.TenantId,
-                DocumentId = document.Id,
-                FileName = fileName,
-                SizeBytes = file.Length,
-                ContentHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
-                BlobName = blobName,
-                CreatedAt = timeProvider.GetUtcNow(),
-            },
-            cancellationToken);
-
-        if (!queue.TryEnqueue(new IngestionWorkItem(job.Id, document)))
+        // The job exists before the message is sent, so its status can be read right away.
+        var job = await jobs.AddAsync(message.ToNewJob(), cancellationToken);
+        try
+        {
+            await publisher.PublishUploadedAsync(message, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             await jobs.DeleteAsync(job.Id, CancellationToken.None);
-            await blobs.DeleteAsync(blobName, CancellationToken.None);
-            return Results.Problem(
-                statusCode: StatusCodes.Status503ServiceUnavailable,
-                title: "Ingestion queue is full",
-                detail: "Too many documents are waiting to be ingested. Try again shortly.");
+            await blobs.DeleteAsync(message.BlobName, CancellationToken.None);
+            if (exception is IngestionBackpressureException)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status503ServiceUnavailable,
+                    title: "Ingestion queue is full",
+                    detail: exception.Message);
+            }
+
+            throw;
         }
 
         return Results.AcceptedAtRoute("GetIngestionJob", new { jobId = job.Id }, job);
@@ -144,6 +154,9 @@ public static class DocumentEndpoints
         ITenantContext tenant,
         IQueryResultCache queryCache,
         IIngestionJobStore jobs,
+        IIngestionEventPublisher publisher,
+        TimeProvider timeProvider,
+        HttpContext httpContext,
         KeywordIndexInitializer keywordIndexInitializer,
         CancellationToken cancellationToken)
     {
@@ -165,6 +178,9 @@ public static class DocumentEndpoints
         await pipeline.RemoveAsync(documentId, cancellationToken);
         await jobs.MarkDocumentRemovedAsync(documentId, cancellationToken);
         await queryCache.InvalidateTenantAsync(tenant.TenantId, cancellationToken);
+        await publisher.PublishIndexChangedAsync(
+            new DocumentIndexChanged(tenant.TenantId, documentId, IndexChange.Removed, timeProvider.GetUtcNow(), httpContext.TraceIdentifier),
+            cancellationToken);
         return Results.NoContent();
     }
 
