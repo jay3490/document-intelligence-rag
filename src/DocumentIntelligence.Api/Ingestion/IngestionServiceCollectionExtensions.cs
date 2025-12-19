@@ -15,7 +15,7 @@ public static class IngestionServiceCollectionExtensions
         services.AddSingleton<KeywordIndexInitializer>();
         services.AddSingleton<IIngestionReadiness>(sp => sp.GetRequiredService<KeywordIndexInitializer>());
         services.AddHostedService(sp => sp.GetRequiredService<KeywordIndexInitializer>());
-        services.AddIngestionMessaging(configuration, consumeInProcess: true);
+        services.AddIngestionMessaging(configuration, IngestionHostRole.Api);
         return services;
     }
 }

@@ -1,5 +1,7 @@
 using System.Text.Json;
 using DocumentIntelligence.Api.Ingestion;
+using DocumentIntelligence.Core.Ingestion;
+using DocumentIntelligence.Infrastructure.Messaging.Kafka;
 using DocumentIntelligence.Infrastructure.Persistence;
 using DocumentIntelligence.Infrastructure.VectorStores;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -13,12 +15,18 @@ public static class HealthEndpoints
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    public static IServiceCollection AddServiceHealthChecks(this IServiceCollection services)
+    public static IServiceCollection AddServiceHealthChecks(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddHealthChecks()
+        var checks = services.AddHealthChecks()
             .AddCheck<VectorStoreHealthCheck>("vector-store", tags: [ReadyTag])
             .AddCheck<KeywordIndexHealthCheck>("keyword-index", tags: [ReadyTag])
             .AddDbContextCheck<IngestionDbContext>("job-database", tags: [ReadyTag]);
+
+        if (configuration.GetValue<IngestionTransport>($"{IngestionOptions.SectionName}:{nameof(IngestionOptions.Transport)}") == IngestionTransport.Kafka)
+        {
+            checks.AddCheck<KafkaHealthCheck>("kafka", tags: [ReadyTag]);
+        }
+
         return services;
     }
 

@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Blobs" />
+    <PackageReference Include="Confluent.Kafka" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />

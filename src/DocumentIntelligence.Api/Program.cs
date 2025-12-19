@@ -19,7 +19,7 @@ builder.Services.AddDocumentIntelligence(builder.Configuration);
 builder.Services.AddIngestionJobPersistence(builder.Configuration);
 builder.Services.AddBackgroundIngestion(builder.Configuration);
 builder.Services.AddSingleton<ITenantContext, DefaultTenantContext>();
-builder.Services.AddServiceHealthChecks();
+builder.Services.AddServiceHealthChecks(builder.Configuration);
 
 builder.Services.AddExceptionHandler<UpstreamServiceExceptionHandler>();
 builder.Services.AddProblemDetails(options =>
