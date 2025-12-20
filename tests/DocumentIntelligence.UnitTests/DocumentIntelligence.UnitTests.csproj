@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DocumentIntelligence.Infrastructure\DocumentIntelligence.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\DocumentIntelligence.IngestionWorker\DocumentIntelligence.IngestionWorker.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,5 @@
 using Confluent.Kafka;
+using DocumentIntelligence.Core.Answering;
 using DocumentIntelligence.Core.Ingestion;
 using DocumentIntelligence.Core.Messaging;
 using DocumentIntelligence.Core.Search;
@@ -35,10 +36,12 @@ public sealed class DocumentUploadedKafkaConsumer(
 /// <summary>
 /// Keeps an API replica's in-memory keyword index in step with documents ingested or removed
 /// elsewhere. Each replica uses its own consumer group and starts from the newest record, since
-/// anything older is already covered by the rebuild at start-up.
+/// anything older is already covered by the rebuild at start-up. Cached answers of the
+/// affected tenant are invalidated as well.
 /// </summary>
 public sealed class IndexChangedKafkaConsumer(
     KeywordIndexSynchronizer synchronizer,
+    IQueryResultCache queryCache,
     IOptions<KafkaOptions> options,
     IMessageProducer producer,
     ILogger<IndexChangedKafkaConsumer> logger)
@@ -52,6 +55,11 @@ public sealed class IndexChangedKafkaConsumer(
 
     protected override AutoOffsetReset OffsetReset => AutoOffsetReset.Latest;
 
-    protected override Task HandleAsync(DocumentIndexChanged message, CancellationToken cancellationToken) =>
-        synchronizer.ApplyAsync(message, cancellationToken);
+    protected override async Task HandleAsync(DocumentIndexChanged message, CancellationToken cancellationToken)
+    {
+        await synchronizer.ApplyAsync(message, cancellationToken);
+
+        // The producer already invalidated a shared cache; this also covers a per-replica one.
+        await queryCache.InvalidateTenantAsync(message.TenantId, cancellationToken);
+    }
 }
