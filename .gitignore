@@ -27,3 +27,6 @@ Thumbs.db
 
 # Local runtime data (SQLite job database, filesystem blob store)
 src/*/data/
+
+# Azure Functions local secrets (copy local.settings.example.json)
+local.settings.json

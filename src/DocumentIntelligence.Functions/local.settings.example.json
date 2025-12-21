@@ -1,0 +1,19 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "DropContainer": "document-drops",
+    "DropStorage": "UseDevelopmentStorage=true",
+    "Ingestion__Transport": "Kafka",
+    "Ingestion__MaxDocumentBytes": "5242880",
+    "Kafka__BootstrapServers": "localhost:9092",
+    "Kafka__CreateTopics": "false",
+    "BlobStorage__Provider": "AzureBlob",
+    "BlobStorage__AzureBlob__ConnectionString": "UseDevelopmentStorage=true",
+    "BlobStorage__AzureBlob__ContainerName": "documents",
+    "Persistence__Provider": "Postgres",
+    "Persistence__ConnectionString": "Host=localhost;Database=document_intelligence;Username=postgres;Password=postgres",
+    "Persistence__InitializeOnStartup": "false"
+  }
+}

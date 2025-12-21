@@ -92,17 +92,7 @@ public static class ServiceCollectionExtensions
             };
         });
 
-        AddValidatedOptions<BlobStorageOptions>(services, configuration, BlobStorageOptions.SectionName);
-        services.AddSingleton<IBlobStore>(sp =>
-        {
-            var blobs = sp.GetRequiredService<IOptions<BlobStorageOptions>>().Value;
-            return blobs.Provider switch
-            {
-                BlobStorageProvider.FileSystem => ActivatorUtilities.CreateInstance<FileSystemBlobStore>(sp),
-                BlobStorageProvider.AzureBlob => ActivatorUtilities.CreateInstance<AzureBlobStore>(sp, sp.GetRequiredService<IOptions<BlobStorageOptions>>()),
-                _ => throw new InvalidOperationException($"Unsupported blob storage provider '{blobs.Provider}'."),
-            };
-        });
+        services.AddBlobStorage(configuration);
 
         services.AddSingleton<IVectorStore>(sp =>
         {
@@ -116,6 +106,23 @@ public static class ServiceCollectionExtensions
             };
         });
 
+        return services;
+    }
+
+    /// <summary>Registers the <see cref="IBlobStore"/> selected by the BlobStorage section.</summary>
+    public static IServiceCollection AddBlobStorage(this IServiceCollection services, IConfiguration configuration)
+    {
+        AddValidatedOptions<BlobStorageOptions>(services, configuration, BlobStorageOptions.SectionName);
+        services.TryAddSingleton<IBlobStore>(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<BlobStorageOptions>>();
+            return options.Value.Provider switch
+            {
+                BlobStorageProvider.FileSystem => new FileSystemBlobStore(options),
+                BlobStorageProvider.AzureBlob => new AzureBlobStore(options),
+                _ => throw new InvalidOperationException($"Unsupported blob storage provider '{options.Value.Provider}'."),
+            };
+        });
         return services;
     }
 
