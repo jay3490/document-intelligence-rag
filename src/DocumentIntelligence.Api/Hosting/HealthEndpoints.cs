@@ -40,13 +40,13 @@ public static class HealthEndpoints
         {
             Predicate = _ => false,
             ResponseWriter = WriteJsonAsync,
-        });
+        }).AllowAnonymous();
 
         app.MapHealthChecks("/health/ready", new HealthCheckOptions
         {
             Predicate = check => check.Tags.Contains(ReadyTag),
             ResponseWriter = WriteJsonAsync,
-        });
+        }).AllowAnonymous();
 
         return app;
     }

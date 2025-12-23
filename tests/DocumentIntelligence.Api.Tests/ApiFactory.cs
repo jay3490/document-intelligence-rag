@@ -3,7 +3,9 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using DocumentIntelligence.Api.Security;
 using DocumentIntelligence.Core.Ingestion;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -27,6 +29,31 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         // Every factory gets its own in-memory job database and blob directory.
         builder.UseSetting("Persistence:ConnectionString", $"Data Source=api-tests-{Guid.NewGuid():N};Mode=Memory;Cache=Shared");
         builder.UseSetting("BlobStorage:FileSystem:RootPath", _blobRoot);
+
+        builder.UseSetting("Auth:Mode", "DevToken");
+        builder.UseSetting("Auth:DevToken:SigningKey", SigningKey);
+    }
+
+    public const string SigningKey = "api-tests-signing-key-0123456789-abcdef";
+
+    public const string DefaultTenant = "default";
+
+    /// <summary>A development token for a tenant, signed with the test key.</summary>
+    public string TokenFor(string tenant) => Services.GetRequiredService<DevTokenIssuer>().Issue(tenant, "tester").AccessToken;
+
+    /// <summary>A client that calls the API as <paramref name="tenant"/>.</summary>
+    public HttpClient CreateClientFor(string tenant)
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenFor(tenant));
+        return client;
+    }
+
+    /// <summary>Clients from <c>CreateClient()</c> act for the default tenant unless told otherwise.</summary>
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenFor(DefaultTenant));
     }
 
     protected override void Dispose(bool disposing)

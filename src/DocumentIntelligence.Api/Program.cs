@@ -3,8 +3,7 @@ using System.Text.Json.Serialization;
 using DocumentIntelligence.Api.Endpoints;
 using DocumentIntelligence.Api.Hosting;
 using DocumentIntelligence.Api.Ingestion;
-using DocumentIntelligence.Api.Tenancy;
-using DocumentIntelligence.Core.Tenancy;
+using DocumentIntelligence.Api.Security;
 using DocumentIntelligence.Infrastructure;
 using DocumentIntelligence.Infrastructure.Persistence;
 using Serilog;
@@ -14,11 +13,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddStructuredLogging();
 builder.AddTracing();
+builder.AddApiAuthentication();
 
 builder.Services.AddDocumentIntelligence(builder.Configuration);
 builder.Services.AddIngestionJobPersistence(builder.Configuration);
 builder.Services.AddBackgroundIngestion(builder.Configuration);
-builder.Services.AddSingleton<ITenantContext, DefaultTenantContext>();
 builder.Services.AddServiceHealthChecks(builder.Configuration);
 
 builder.Services.AddExceptionHandler<UpstreamServiceExceptionHandler>();
@@ -47,6 +46,8 @@ app.UseSerilogRequestLogging(options =>
         : context.Request.Path.StartsWithSegments("/health") ? LogEventLevel.Verbose
         : LogEventLevel.Information);
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
@@ -54,6 +55,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.MapAuthEndpoints();
 app.MapDocumentEndpoints();
 app.MapQueryEndpoints();
 app.MapServiceHealthChecks();
