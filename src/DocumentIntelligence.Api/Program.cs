@@ -14,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddStructuredLogging();
 builder.AddTracing();
 builder.AddApiAuthentication();
+builder.AddRequestProtection();
 
 builder.Services.AddDocumentIntelligence(builder.Configuration);
 builder.Services.AddIngestionJobPersistence(builder.Configuration);
@@ -31,11 +32,6 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Browsers on another origin (for example "ng serve" without its proxy) need CORS.
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-builder.Services.AddCors(options =>
-    options.AddDefaultPolicy(policy => policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()));
-
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -45,9 +41,11 @@ app.UseSerilogRequestLogging(options =>
         exception is not null || context.Response.StatusCode >= 500 ? LogEventLevel.Error
         : context.Request.Path.StartsWithSegments("/health") ? LogEventLevel.Verbose
         : LogEventLevel.Information);
-app.UseCors();
+// Browsers on another origin (for example "ng serve" without its proxy) need CORS.
+app.UseRequestProtection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {

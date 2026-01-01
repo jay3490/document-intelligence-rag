@@ -32,6 +32,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
         builder.UseSetting("Auth:Mode", "DevToken");
         builder.UseSetting("Auth:DevToken:SigningKey", SigningKey);
+
+        // Tests poll job status quickly; rate limits are exercised by their own tests.
+        builder.UseSetting("RateLimiting:Enabled", "false");
     }
 
     public const string SigningKey = "api-tests-signing-key-0123456789-abcdef";
@@ -47,6 +50,23 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         var client = CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenFor(tenant));
         return client;
+    }
+
+    /// <summary>A variant of this factory with extra host settings; its clients act for the default tenant.</summary>
+    public Configured With(Action<IWebHostBuilder> configure) => new(this, WithWebHostBuilder(configure));
+
+    public sealed class Configured(ApiFactory parent, WebApplicationFactory<Program> inner) : IDisposable
+    {
+        public HttpClient CreateClient() => inner.CreateClient();
+
+        public HttpClient CreateClientFor(string tenant)
+        {
+            var client = inner.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", parent.TokenFor(tenant));
+            return client;
+        }
+
+        public void Dispose() => inner.Dispose();
     }
 
     /// <summary>Clients from <c>CreateClient()</c> act for the default tenant unless told otherwise.</summary>

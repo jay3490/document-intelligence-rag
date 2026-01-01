@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using DocumentIntelligence.Api.Hosting;
 using DocumentIntelligence.Api.Ingestion;
 using DocumentIntelligence.Core.Answering;
 using DocumentIntelligence.Core.Documents;
@@ -22,6 +23,9 @@ public static class DocumentEndpoints
 
         documents.MapPost("/", UploadAsync)
             .DisableAntiforgery()
+            .RequireRateLimiting(RequestProtection.UploadPolicy)
+            .WithMetadata(new BodySizeLimit(
+                app.ServiceProvider.GetRequiredService<IOptions<IngestionOptions>>().Value.MaxDocumentBytes + RequestProtection.UploadOverheadBytes))
             .WithSummary("Upload a .txt or .md document, with optional tags, source and date, for background ingestion.");
 
         documents.MapGet("/", (Bm25Index index, ITenantContext tenant) => Results.Ok(index.ListDocuments(tenant.TenantId)))
@@ -57,6 +61,7 @@ public static class DocumentEndpoints
         CancellationToken cancellationToken)
     {
         const string MissingFile = "Attach the document as multipart form data in a field named 'file'.";
+
         if (!request.HasFormContentType)
         {
             return Invalid("file", MissingFile);

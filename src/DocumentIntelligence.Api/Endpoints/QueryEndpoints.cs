@@ -1,3 +1,4 @@
+using DocumentIntelligence.Api.Hosting;
 using DocumentIntelligence.Core.Answering;
 using DocumentIntelligence.Core.Tenancy;
 
@@ -17,6 +18,7 @@ public static class QueryEndpoints
     {
         app.MapPost("/api/query", QueryAsync)
             .WithTags("Query")
+            .RequireRateLimiting(RequestProtection.QueryPolicy)
             .WithSummary("Answer a question from the current tenant's documents, optionally filtered by tags, source and date.");
 
         return app;
