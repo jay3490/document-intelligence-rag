@@ -58,7 +58,16 @@ public sealed partial class DocumentUploadedHandler(
         activity?.SetTag("correlation.id", message.CorrelationId);
 
         await jobs.AddAsync(message.ToNewJob(), cancellationToken);
+        Telemetry.IngestionLag.Record(Math.Max(0, (timeProvider.GetUtcNow() - message.UploadedAt).TotalSeconds));
 
+        var outcome = await HandleAttemptsAsync(message, cancellationToken);
+        Telemetry.IngestedDocuments.Add(1, new KeyValuePair<string, object?>("outcome", OutcomeTag(outcome)));
+        activity?.SetTag("ingestion.outcome", OutcomeTag(outcome));
+        return outcome;
+    }
+
+    private async Task<UploadOutcome> HandleAttemptsAsync(DocumentUploaded message, CancellationToken cancellationToken)
+    {
         var settings = options.Value;
         for (var attempt = 1; ; attempt++)
         {
@@ -86,6 +95,14 @@ public sealed partial class DocumentUploadedHandler(
             }
         }
     }
+
+    private static string OutcomeTag(UploadOutcome outcome) => outcome switch
+    {
+        UploadOutcome.Completed => "completed",
+        UploadOutcome.Duplicate => "duplicate",
+        UploadOutcome.AlreadyProcessed => "already_processed",
+        _ => "dead_lettered",
+    };
 
     /// <summary>Failures a later attempt can plausibly get past.</summary>
     public static bool IsTransient(Exception exception) =>

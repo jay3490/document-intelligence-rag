@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using DocumentIntelligence.Core.Search;
 using Microsoft.Extensions.Options;
 
@@ -17,9 +18,11 @@ public sealed class CachedQuestionAnswering(
         ArgumentException.ThrowIfNullOrWhiteSpace(question);
         ArgumentNullException.ThrowIfNull(filter);
 
+        var started = Stopwatch.GetTimestamp();
         var key = QueryCacheKey.Create(question, topK ?? options.Value.DefaultTopK, filter);
         if (await cache.GetAsync(key, cancellationToken) is { } cached)
         {
+            Record(started, hit: true);
             return new CachedAnswer(cached, FromCache: true);
         }
 
@@ -31,7 +34,15 @@ public sealed class CachedQuestionAnswering(
             await cache.SetAsync(key, result, cancellationToken);
         }
 
+        Record(started, hit: false);
         return new CachedAnswer(result, FromCache: false);
+    }
+
+    private static void Record(long started, bool hit)
+    {
+        var tag = new KeyValuePair<string, object?>("cache", hit ? "hit" : "miss");
+        Telemetry.QueryDuration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds, tag);
+        Telemetry.QueryCacheLookups.Add(1, new KeyValuePair<string, object?>("result", hit ? "hit" : "miss"));
     }
 }
 

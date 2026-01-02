@@ -12,7 +12,7 @@ using Serilog.Events;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddStructuredLogging();
-builder.AddTracing();
+builder.AddTelemetry();
 builder.AddApiAuthentication();
 builder.AddRequestProtection();
 
@@ -34,12 +34,13 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+app.UseCorrelationIds();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseSerilogRequestLogging(options =>
     options.GetLevel = (context, _, exception) =>
         exception is not null || context.Response.StatusCode >= 500 ? LogEventLevel.Error
-        : context.Request.Path.StartsWithSegments("/health") ? LogEventLevel.Verbose
+        : context.Request.Path.StartsWithSegments("/health") || context.Request.Path.StartsWithSegments(ObservabilityExtensions.MetricsPath) ? LogEventLevel.Verbose
         : LogEventLevel.Information);
 // Browsers on another origin (for example "ng serve" without its proxy) need CORS.
 app.UseRequestProtection();
@@ -57,6 +58,7 @@ app.MapAuthEndpoints();
 app.MapDocumentEndpoints();
 app.MapQueryEndpoints();
 app.MapServiceHealthChecks();
+app.MapMetrics();
 
 app.Run();
 

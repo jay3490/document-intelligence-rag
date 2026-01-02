@@ -45,9 +45,9 @@ public sealed class CorsSettings
 
     public string[] AllowedMethods { get; set; } = ["GET", "POST", "DELETE"];
 
-    public string[] AllowedHeaders { get; set; } = ["Authorization", "Content-Type", "X-Correlation-ID"];
+    public string[] AllowedHeaders { get; set; } = ["Authorization", "Content-Type", CorrelationIds.HeaderName];
 
-    public string[] ExposedHeaders { get; set; } = ["X-Cache", "X-Correlation-ID", "Retry-After", "Location"];
+    public string[] ExposedHeaders { get; set; } = ["X-Cache", CorrelationIds.HeaderName, "Retry-After", "Location"];
 
     [Range(0, 86_400)]
     public int PreflightMaxAgeSeconds { get; set; } = 600;
@@ -136,7 +136,7 @@ public static class RequestProtection
     private static RateLimitPartition<string> PerTenant(HttpContext context, Func<RateLimitingOptions, int> permits, string bucket)
     {
         var settings = context.RequestServices.GetRequiredService<IOptions<RateLimitingOptions>>().Value;
-        if (!settings.Enabled || context.Request.Path.StartsWithSegments("/health"))
+        if (!settings.Enabled || context.Request.Path.StartsWithSegments("/health") || context.Request.Path.StartsWithSegments(ObservabilityExtensions.MetricsPath))
         {
             return RateLimitPartition.GetNoLimiter($"{bucket}:unlimited");
         }

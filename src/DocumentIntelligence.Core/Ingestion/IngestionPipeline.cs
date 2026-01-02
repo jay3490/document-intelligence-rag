@@ -70,6 +70,7 @@ public sealed partial class IngestionPipeline(
         }
 
         keywordIndex.Add(chunks);
+        Telemetry.IngestedChunks.Add(chunks.Count);
 
         activity?.SetTag("document.chunks", chunks.Count);
         LogIngested(logger, document.Name, document.Id, chunks.Count);
