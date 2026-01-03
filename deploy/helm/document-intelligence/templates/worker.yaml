@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "di.fullname" . }}-worker
+  labels:
+    {{- include "di.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  {{- if not .Values.worker.autoscaling.enabled }}
+  replicas: {{ .Values.worker.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "di.selector" (list . "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "di.labels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- include "di.metricsAnnotations" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # Let an in-flight document finish before the pod goes away.
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: {{ include "di.image" (list . .Values.image.worker) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {{ include "di.fullname" . }}
+          env:
+            - name: Persistence__InitializeOnStartup
+              value: "false"
+            {{- include "di.sharedSecretEnv" . | nindent 12 }}
+            {{- with .Values.worker.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- include "di.probes" . | nindent 10 }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if eq .Values.config.blobStorage.provider "FileSystem" }}
+            - name: blobs
+              mountPath: {{ .Values.persistence.blobs.mountPath }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if eq .Values.config.blobStorage.provider "FileSystem" }}
+        - name: blobs
+          persistentVolumeClaim:
+            claimName: {{ required "persistence.blobs.existingClaim is required for the FileSystem blob store" .Values.persistence.blobs.existingClaim }}
+        {{- end }}
+---
+# Gives the worker's metrics endpoint a stable address for a ServiceMonitor.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "di.fullname" . }}-worker
+  labels:
+    {{- include "di.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "di.selector" (list . "worker") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

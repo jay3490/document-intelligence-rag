@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "di.fullname" . }}-web
+  labels:
+    {{- include "di.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels:
+      {{- include "di.selector" (list . "web") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "di.labels" . | nindent 8 }}
+        app.kubernetes.io/component: web
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: web
+          image: {{ include "di.image" (list . .Values.image.web) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            # Same origin: the ingress routes /api to the API service.
+            - name: API_BASE_URL
+              value: ""
+            # Used by nginx when the app is served without the ingress in front.
+            - name: API_UPSTREAM
+              value: http://{{ include "di.fullname" . }}-api:{{ .Values.api.service.port }}
+          ports:
+            - name: http
+              containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "di.fullname" . }}-web
+  labels:
+    {{- include "di.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  type: {{ .Values.web.service.type }}
+  selector:
+    {{- include "di.selector" (list . "web") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.web.service.port }}
+      targetPort: http

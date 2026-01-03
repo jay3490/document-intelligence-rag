@@ -18,6 +18,10 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /app ./
 
+# Mount point for the shared filesystem blob store; owned by the app user so a fresh
+# named volume mounted here is writable.
+RUN mkdir -p /data/blobs && chown $APP_UID /data/blobs
+
 ENV ASPNETCORE_HTTP_PORTS=8080 \
     DOTNET_RUNNING_IN_CONTAINER=true
 EXPOSE 8080

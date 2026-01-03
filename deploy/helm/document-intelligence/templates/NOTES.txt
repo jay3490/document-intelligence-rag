@@ -1,0 +1,10 @@
+Document Intelligence {{ .Chart.AppVersion }} is deployed as release {{ .Release.Name }}.
+
+API:    service {{ include "di.fullname" . }}-api (port {{ .Values.api.service.port }})
+Worker: deployment {{ include "di.fullname" . }}-worker, metrics on port 8080 at /metrics
+Web:    service {{ include "di.fullname" . }}-web (port {{ .Values.web.service.port }})
+
+Secrets are read from the existing Secret "{{ .Values.secrets.existingSecret }}".
+{{- if eq .Values.config.auth.mode "Jwt" }}
+Callers need a bearer token from {{ .Values.config.auth.authority | default "<set config.auth.authority>" }} with a "{{ .Values.config.auth.tenantClaim }}" claim.
+{{- end }}

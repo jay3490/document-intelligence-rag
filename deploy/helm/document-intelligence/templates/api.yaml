@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "di.fullname" . }}-api
+  labels:
+    {{- include "di.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  {{- if not .Values.api.autoscaling.enabled }}
+  replicas: {{ .Values.api.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "di.selector" (list . "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "di.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- include "di.metricsAnnotations" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ include "di.image" (list . .Values.image.api) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {{ include "di.fullname" . }}
+          env:
+            # The API owns schema migrations; workers never run them.
+            - name: Persistence__InitializeOnStartup
+              value: "true"
+            - name: Auth__Mode
+              value: {{ .Values.config.auth.mode | quote }}
+            - name: Auth__Authority
+              value: {{ .Values.config.auth.authority | quote }}
+            - name: Auth__Audience
+              value: {{ .Values.config.auth.audience | quote }}
+            - name: Auth__TenantClaim
+              value: {{ .Values.config.auth.tenantClaim | quote }}
+            - name: RateLimiting__RequestsPerMinute
+              value: {{ .Values.config.rateLimiting.requestsPerMinute | quote }}
+            - name: RateLimiting__QueriesPerMinute
+              value: {{ .Values.config.rateLimiting.queriesPerMinute | quote }}
+            - name: RateLimiting__UploadsPerMinute
+              value: {{ .Values.config.rateLimiting.uploadsPerMinute | quote }}
+            {{- range $index, $origin := .Values.config.cors.allowedOrigins }}
+            - name: Cors__AllowedOrigins__{{ $index }}
+              value: {{ $origin | quote }}
+            {{- end }}
+            {{- include "di.sharedSecretEnv" . | nindent 12 }}
+            {{- with .Values.api.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- include "di.probes" . | nindent 10 }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if eq .Values.config.blobStorage.provider "FileSystem" }}
+            - name: blobs
+              mountPath: {{ .Values.persistence.blobs.mountPath }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if eq .Values.config.blobStorage.provider "FileSystem" }}
+        - name: blobs
+          persistentVolumeClaim:
+            claimName: {{ required "persistence.blobs.existingClaim is required for the FileSystem blob store" .Values.persistence.blobs.existingClaim }}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "di.fullname" . }}-api
+  labels:
+    {{- include "di.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  type: {{ .Values.api.service.type }}
+  selector:
+    {{- include "di.selector" (list . "api") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.api.service.port }}
+      targetPort: http

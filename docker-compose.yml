@@ -1,7 +1,36 @@
-# Offline by default: deterministic embeddings and extractive answers, no model required.
-# To use a local model instead:
+# Local stack: API, ingestion worker and web app with Kafka (KRaft, single node), PostgreSQL,
+# Redis and Qdrant. Offline AI providers by default: deterministic embeddings and extractive
+# answers, no model required. To use a local model instead:
 #   AI_PROVIDER=OpenAICompatible docker compose --profile ollama up --build
 # and pull the models once (see README).
+#
+# Sign-in uses development tokens (POST /api/auth/dev-token). That is only suitable for a
+# local stack; deployments use Auth:Mode=Jwt with a real identity provider.
+
+x-ai-settings: &ai-settings
+  Ai__Provider: ${AI_PROVIDER:-Offline}
+  Ai__BaseUrl: ${AI_BASE_URL:-http://ollama:11434/v1}
+  Ai__ApiKey: ${AI_API_KEY:-}
+  Ai__ChatModel: ${AI_CHAT_MODEL:-llama3.2}
+  Ai__EmbeddingModel: ${AI_EMBEDDING_MODEL:-nomic-embed-text}
+  Ai__EmbeddingDimensions: ${AI_EMBEDDING_DIMENSIONS:-512}
+
+x-shared-settings: &shared-settings
+  VectorStore__Provider: Qdrant
+  VectorStore__Qdrant__Url: http://qdrant:6333
+  VectorStore__Qdrant__Collection: ${QDRANT_COLLECTION:-documents}
+  Ingestion__Transport: Kafka
+  Kafka__BootstrapServers: kafka:9092
+  Persistence__Provider: Postgres
+  Persistence__ConnectionString: Host=postgres;Database=document_intelligence;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres}
+  BlobStorage__Provider: FileSystem
+  BlobStorage__FileSystem__RootPath: /data/blobs
+  QueryCache__Provider: Redis
+  QueryCache__RedisConnection: redis:6379
+  # JSON logs for container log collectors.
+  Serilog__WriteTo__0__Name: Console
+  Serilog__WriteTo__0__Args__formatter: "Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact"
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
 
 services:
   qdrant:
@@ -12,29 +41,110 @@ services:
       - qdrant-data:/qdrant/storage
     restart: unless-stopped
 
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Topics are created by the services with the partition count they expect.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      # For clients on the host, for example a worker started with "dotnet run".
+      - "9094:9094"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16.10-alpine
+    environment:
+      POSTGRES_DB: document_intelligence
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d document_intelligence"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
   api:
     build:
       context: .
       dockerfile: src/DocumentIntelligence.Api/Dockerfile
     environment:
+      <<: [*shared-settings, *ai-settings]
       ASPNETCORE_ENVIRONMENT: Production
-      VectorStore__Provider: Qdrant
-      VectorStore__Qdrant__Url: http://qdrant:6333
-      VectorStore__Qdrant__Collection: ${QDRANT_COLLECTION:-documents}
-      Ai__Provider: ${AI_PROVIDER:-Offline}
-      Ai__BaseUrl: ${AI_BASE_URL:-http://ollama:11434/v1}
-      Ai__ApiKey: ${AI_API_KEY:-}
-      Ai__ChatModel: ${AI_CHAT_MODEL:-llama3.2}
-      Ai__EmbeddingModel: ${AI_EMBEDDING_MODEL:-nomic-embed-text}
-      Ai__EmbeddingDimensions: ${AI_EMBEDDING_DIMENSIONS:-512}
-      # JSON logs for container log collectors.
-      Serilog__WriteTo__0__Name: Console
-      Serilog__WriteTo__0__Args__formatter: "Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact"
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      # The API applies database migrations; the worker does not.
+      Persistence__InitializeOnStartup: "true"
+      Auth__Mode: DevToken
+      Auth__DevToken__SigningKey: ${DEV_TOKEN_SIGNING_KEY:-compose-dev-token-signing-key-change-me-0123456789}
+      Auth__DevToken__AllowOutsideDevelopment: "true"
     ports:
       - "5080:8080"
+    volumes:
+      - blob-data:/data/blobs
     depends_on:
-      - qdrant
+      qdrant:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: src/DocumentIntelligence.IngestionWorker/Dockerfile
+    environment:
+      <<: [*shared-settings, *ai-settings]
+      ASPNETCORE_ENVIRONMENT: Production
+      Persistence__InitializeOnStartup: "false"
+    ports:
+      - "5090:8080"
+    volumes:
+      - blob-data:/data/blobs
+    depends_on:
+      api:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   web:
@@ -59,4 +169,7 @@ services:
 
 volumes:
   qdrant-data:
+  kafka-data:
+  postgres-data:
+  blob-data:
   ollama-data:

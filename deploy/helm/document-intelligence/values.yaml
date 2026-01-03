@@ -1,0 +1,141 @@
+# Container images. Tags default to the chart's appVersion.
+image:
+  registry: ""
+  pullPolicy: IfNotPresent
+  api:
+    repository: document-intelligence-api
+    tag: ""
+  worker:
+    repository: document-intelligence-worker
+    tag: ""
+  web:
+    repository: document-intelligence-web
+    tag: ""
+imagePullSecrets: []
+
+api:
+  replicas: 2
+  resources:
+    requests: { cpu: 250m, memory: 384Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  service:
+    type: ClusterIP
+    port: 80
+  # Extra environment variables, for example Retrieval__Reranker.
+  extraEnv: []
+
+worker:
+  replicas: 2
+  resources:
+    requests: { cpu: 250m, memory: 384Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  # Upload partitions are shared among workers, so more replicas than
+  # kafka.topicPartitions leaves the extra ones idle.
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 75
+  extraEnv: []
+
+web:
+  replicas: 2
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 250m, memory: 128Mi }
+  service:
+    type: ClusterIP
+    port: 80
+
+probes:
+  liveness: { initialDelaySeconds: 10, periodSeconds: 15, timeoutSeconds: 3, failureThreshold: 3 }
+  readiness: { initialDelaySeconds: 5, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+
+ingress:
+  enabled: false
+  className: ""
+  host: documents.example.com
+  annotations: {}
+  tls: []
+
+# Non-secret settings, passed to the API and the worker as environment variables.
+config:
+  ai:
+    provider: OpenAICompatible
+    baseUrl: https://api.openai.com/v1
+    chatModel: gpt-4o-mini
+    embeddingModel: text-embedding-3-small
+    embeddingDimensions: 512
+  retrieval:
+    reranker: None
+  qdrant:
+    url: http://qdrant:6333
+    collection: documents
+  kafka:
+    bootstrapServers: kafka:9092
+    # Leave topic creation to whoever manages the cluster in shared environments.
+    createTopics: false
+    topicPartitions: 3
+    securityProtocol: ""
+    saslMechanism: ""
+    saslUsername: ""
+  postgres:
+    provider: Postgres
+  redis:
+    enabled: true
+  blobStorage:
+    # AzureBlob, or FileSystem with persistence.blobs.existingClaim (ReadWriteMany).
+    provider: AzureBlob
+    containerName: documents
+  auth:
+    mode: Jwt
+    authority: ""
+    audience: ""
+    tenantClaim: tenant_id
+  cors:
+    allowedOrigins: []
+  rateLimiting:
+    requestsPerMinute: 300
+    queriesPerMinute: 60
+    uploadsPerMinute: 30
+
+# Secrets are never created by this chart; reference an existing Secret instead.
+# Keys that are not present in the Secret are simply not set.
+secrets:
+  existingSecret: document-intelligence
+  keys:
+    postgresConnectionString: postgres-connection-string
+    redisConnection: redis-connection
+    aiApiKey: ai-api-key
+    qdrantApiKey: qdrant-api-key
+    kafkaSaslPassword: kafka-sasl-password
+    azureBlobConnectionString: azure-blob-connection-string
+
+persistence:
+  blobs:
+    # Required when config.blobStorage.provider is FileSystem.
+    existingClaim: ""
+    mountPath: /data/blobs
+
+metrics:
+  # Adds prometheus.io scrape annotations to the API and worker pods.
+  podAnnotations: true
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]

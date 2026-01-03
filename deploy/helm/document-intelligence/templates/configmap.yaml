@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "di.fullname" . }}
+  labels:
+    {{- include "di.labels" . | nindent 4 }}
+data:
+  ASPNETCORE_ENVIRONMENT: Production
+  Ai__Provider: {{ .Values.config.ai.provider | quote }}
+  Ai__BaseUrl: {{ .Values.config.ai.baseUrl | quote }}
+  Ai__ChatModel: {{ .Values.config.ai.chatModel | quote }}
+  Ai__EmbeddingModel: {{ .Values.config.ai.embeddingModel | quote }}
+  Ai__EmbeddingDimensions: {{ .Values.config.ai.embeddingDimensions | quote }}
+  Retrieval__Reranker: {{ .Values.config.retrieval.reranker | quote }}
+  VectorStore__Provider: Qdrant
+  VectorStore__Qdrant__Url: {{ .Values.config.qdrant.url | quote }}
+  VectorStore__Qdrant__Collection: {{ .Values.config.qdrant.collection | quote }}
+  Ingestion__Transport: Kafka
+  Kafka__BootstrapServers: {{ .Values.config.kafka.bootstrapServers | quote }}
+  Kafka__CreateTopics: {{ .Values.config.kafka.createTopics | quote }}
+  Kafka__TopicPartitions: {{ .Values.config.kafka.topicPartitions | quote }}
+  {{- with .Values.config.kafka.securityProtocol }}
+  Kafka__SecurityProtocol: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.kafka.saslMechanism }}
+  Kafka__SaslMechanism: {{ . | quote }}
+  Kafka__SaslUsername: {{ $.Values.config.kafka.saslUsername | quote }}
+  {{- end }}
+  Persistence__Provider: {{ .Values.config.postgres.provider | quote }}
+  QueryCache__Provider: {{ ternary "Redis" "Memory" .Values.config.redis.enabled | quote }}
+  BlobStorage__Provider: {{ .Values.config.blobStorage.provider | quote }}
+  BlobStorage__AzureBlob__ContainerName: {{ .Values.config.blobStorage.containerName | quote }}
+  BlobStorage__FileSystem__RootPath: {{ .Values.persistence.blobs.mountPath | quote }}
+  Serilog__WriteTo__0__Name: Console
+  Serilog__WriteTo__0__Args__formatter: "Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact"
