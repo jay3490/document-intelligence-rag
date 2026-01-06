@@ -1,7 +1,8 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { forkJoin } from 'rxjs';
-import { DocumentApiService, describeError } from '../core/document-api.service';
+import { FormsModule } from '@angular/forms';
+import { DocumentApiService, describeError, parseTags } from '../core/document-api.service';
 import { IndexedDocument, IngestionJob } from '../core/models';
 
 const pollIntervalMs = 1000;
@@ -9,7 +10,7 @@ const acceptedExtensions = ['.md', '.markdown', '.txt', '.text'];
 
 @Component({
   selector: 'app-documents-panel',
-  imports: [DatePipe, DecimalPipe],
+  imports: [DatePipe, DecimalPipe, FormsModule],
   templateUrl: './documents-panel.html',
   styleUrl: './documents-panel.css',
 })
@@ -23,6 +24,9 @@ export class DocumentsPanel implements OnInit {
   protected readonly error = signal<string | null>(null);
   protected readonly uploading = signal(false);
   protected readonly dragging = signal(false);
+  protected uploadTags = '';
+  protected uploadSource = '';
+  protected uploadDate = '';
   protected readonly pending = computed(() =>
     this.jobs().some((job) => job.status === 'Queued' || job.status === 'Processing'),
   );
@@ -73,7 +77,12 @@ export class DocumentsPanel implements OnInit {
     }
 
     this.uploading.set(true);
-    forkJoin(supported.map((file) => this.api.upload(file))).subscribe({
+    const metadata = {
+      tags: parseTags(this.uploadTags),
+      source: this.uploadSource.trim() || undefined,
+      date: this.uploadDate || undefined,
+    };
+    forkJoin(supported.map((file) => this.api.upload(file, metadata))).subscribe({
       next: () => {
         this.uploading.set(false);
         this.refresh();

@@ -73,3 +73,35 @@
   background: #fdf0d2;
   color: #7a5200;
 }
+
+.badge.duplicate {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.metadata {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.metadata summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.metadata label {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  color: var(--muted);
+}
+
+.tag {
+  display: inline-block;
+  margin-left: 0.25rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.75rem;
+}

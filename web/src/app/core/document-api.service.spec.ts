@@ -1,4 +1,4 @@
-import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, HttpHeaders, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { APP_CONFIG } from './app-config';
@@ -43,6 +43,32 @@ describe('DocumentApiService', () => {
     expect(answer).toBe('25 days [1].');
   });
 
+  it('sends upload metadata as form fields', () => {
+    const file = new File(['text'], 'a.md');
+
+    service.upload(file, { tags: ['hr', 'policy'], source: 'wiki', date: '2024-03-01' }).subscribe();
+
+    const body = http.expectOne('http://api.test/api/documents').request.body as FormData;
+    expect(body.get('tags')).toBe('hr,policy');
+    expect(body.get('source')).toBe('wiki');
+    expect(body.get('date')).toBe('2024-03-01');
+  });
+
+  it('sends only the filters that are set', () => {
+    service.ask('q', undefined, { tags: [' hr ', ''], source: '  ', from: '2024-01-01T00:00:00Z' }).subscribe();
+
+    expect(http.expectOne('http://api.test/api/query').request.body).toEqual({
+      question: 'q',
+      filters: { tags: ['hr'], from: '2024-01-01T00:00:00Z' },
+    });
+  });
+
+  it('omits empty filters entirely', () => {
+    service.ask('q', undefined, { tags: [], source: '' }).subscribe();
+
+    expect(http.expectOne('http://api.test/api/query').request.body).toEqual({ question: 'q' });
+  });
+
   it('deletes documents by id', () => {
     service.deleteDocument('abc').subscribe();
 
@@ -64,6 +90,19 @@ describe('describeError', () => {
   it('falls back to the problem detail, then the title', () => {
     expect(describeError(new HttpErrorResponse({ status: 502, error: { title: 'A dependency failed', detail: 'qdrant down' } }))).toBe('qdrant down');
     expect(describeError(new HttpErrorResponse({ status: 404, error: { title: 'Not found' } }))).toBe('Not found');
+  });
+
+  it('explains rate limiting with the retry delay', () => {
+    const error = new HttpErrorResponse({
+      status: 429,
+      error: { title: 'Too many requests' },
+      headers: new HttpHeaders({ 'Retry-After': '30' }),
+    });
+    expect(describeError(error)).toBe('Too many requests. Try again in 30 seconds.');
+  });
+
+  it('explains a missing or expired session', () => {
+    expect(describeError(new HttpErrorResponse({ status: 401 }))).toContain('not signed in');
   });
 
   it('reports an unreachable API', () => {

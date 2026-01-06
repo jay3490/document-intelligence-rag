@@ -59,6 +59,36 @@
     }
   </div>
 
+  <div class="filters">
+    <button type="button" class="link" (click)="showFilters.set(!showFilters())" [attr.aria-expanded]="showFilters()">
+      {{ showFilters() ? 'Hide filters' : 'Filter sources' }}
+      @if (activeFilterCount > 0) {
+        ({{ activeFilterCount }} active)
+      }
+    </button>
+    @if (showFilters()) {
+      <div class="filter-grid">
+        <label>
+          Tags (any of, comma-separated)
+          <input name="filterTags" [(ngModel)]="filterTags" placeholder="hr, policy" />
+        </label>
+        <label>
+          Source
+          <input name="filterSource" [(ngModel)]="filterSource" placeholder="wiki" maxlength="200" />
+        </label>
+        <label>
+          From
+          <input name="filterFrom" type="date" [(ngModel)]="filterFrom" />
+        </label>
+        <label>
+          To
+          <input name="filterTo" type="date" [(ngModel)]="filterTo" />
+        </label>
+        <button type="button" class="link" (click)="clearFilters()">Clear filters</button>
+      </div>
+    }
+  </div>
+
   <form class="composer" (ngSubmit)="ask()">
     <textarea
       name="question"

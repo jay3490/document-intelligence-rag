@@ -1,8 +1,8 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { DocumentApiService, describeError } from '../core/document-api.service';
-import { Citation } from '../core/models';
+import { DocumentApiService, describeError, parseTags } from '../core/document-api.service';
+import { Citation, QueryFilters } from '../core/models';
 import { AnswerSegment, splitAnswer } from './answer-segments';
 
 export interface Exchange {
@@ -27,6 +27,32 @@ export class ChatPanel {
   protected readonly exchanges = signal<Exchange[]>([]);
   protected readonly highlighted = signal<string | null>(null);
   protected question = '';
+  protected readonly showFilters = signal(false);
+  protected filterTags = '';
+  protected filterSource = '';
+  protected filterFrom = '';
+  protected filterTo = '';
+
+  /** The filters as the API expects them; date inputs cover whole days. */
+  protected get filters(): QueryFilters {
+    return {
+      tags: parseTags(this.filterTags),
+      source: this.filterSource,
+      from: this.filterFrom ? `${this.filterFrom}T00:00:00Z` : undefined,
+      to: this.filterTo ? `${this.filterTo}T23:59:59Z` : undefined,
+    };
+  }
+
+  protected get activeFilterCount(): number {
+    return [parseTags(this.filterTags).length > 0, this.filterSource.trim(), this.filterFrom, this.filterTo].filter(Boolean).length;
+  }
+
+  protected clearFilters(): void {
+    this.filterTags = '';
+    this.filterSource = '';
+    this.filterFrom = '';
+    this.filterTo = '';
+  }
 
   protected get busy(): boolean {
     return this.exchanges().some((exchange) => exchange.state === 'pending');
@@ -45,7 +71,7 @@ export class ChatPanel {
       { id, question, state: 'pending', segments: [], citations: [] },
     ]);
 
-    this.api.ask(question).subscribe({
+    this.api.ask(question, undefined, this.filters).subscribe({
       next: (result) =>
         this.update(id, {
           state: 'answered',

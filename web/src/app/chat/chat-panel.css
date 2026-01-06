@@ -98,3 +98,22 @@ blockquote {
   border-radius: var(--radius);
   font: inherit;
 }
+
+.filters {
+  margin: 0.75rem 0;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem 0.75rem;
+  align-items: end;
+  margin-top: 0.5rem;
+}
+
+.filter-grid label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}

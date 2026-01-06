@@ -12,6 +12,22 @@
     <span>{{ uploading() ? 'Uploading…' : 'Drop .md or .txt files here, or click to choose' }}</span>
   </label>
 
+  <details class="metadata">
+    <summary>Metadata for the next upload</summary>
+    <label>
+      Tags (comma-separated)
+      <input name="uploadTags" [(ngModel)]="uploadTags" placeholder="hr, policy" />
+    </label>
+    <label>
+      Source
+      <input name="uploadSource" [(ngModel)]="uploadSource" placeholder="wiki" maxlength="200" />
+    </label>
+    <label>
+      Document date
+      <input name="uploadDate" type="date" [(ngModel)]="uploadDate" />
+    </label>
+  </details>
+
   @if (error(); as message) {
     <p class="error" role="alert">{{ message }}</p>
   }
@@ -26,6 +42,16 @@
           <div>
             <strong>{{ document.name }}</strong>
             <span class="muted">{{ document.chunkCount }} chunks · {{ document.tokenCount | number }} tokens</span>
+            @if (document.tags.length > 0 || document.source) {
+              <span class="muted">
+                @if (document.source) {
+                  {{ document.source }}
+                }
+                @for (tag of document.tags; track tag) {
+                  <span class="tag">{{ tag }}</span>
+                }
+              </span>
+            }
           </div>
           <button type="button" class="link" (click)="remove(document)" [attr.aria-label]="'Remove ' + document.name">
             Remove

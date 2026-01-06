@@ -1,0 +1,84 @@
+<section class="panel">
+  <header class="toolbar">
+    <h2>Ingestion status</h2>
+    <div class="controls">
+      <label>
+        Show
+        <select name="filter" [ngModel]="filter()" (ngModelChange)="filter.set($event)">
+          <option value="all">All jobs</option>
+          <option value="active">Queued or processing ({{ activeCount() }})</option>
+          <option value="failed">Failed ({{ failedCount() }})</option>
+        </select>
+      </label>
+      <button type="button" (click)="refresh()">Refresh</button>
+    </div>
+  </header>
+
+  <p class="muted">
+    @if (activeCount() > 0) {
+      {{ activeCount() }} job(s) in progress; refreshing every few seconds.
+    } @else {
+      Nothing in progress.
+    }
+    @if (lastUpdated(); as updated) {
+      Last updated {{ updated | date: 'mediumTime' }}.
+    }
+  </p>
+
+  @if (error(); as message) {
+    <p class="error" role="alert">
+      Could not refresh the job list: {{ message }}
+      @if (jobs().length > 0) {
+        Showing the last loaded list.
+      }
+    </p>
+  }
+
+  @if (loading()) {
+    <p class="muted">Loading jobs…</p>
+  } @else if (visible().length === 0) {
+    <p class="muted empty">No jobs to show.</p>
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Document</th>
+            <th scope="col">Status</th>
+            <th scope="col">Attempts</th>
+            <th scope="col">Chunks</th>
+            <th scope="col">Uploaded</th>
+            <th scope="col">Took</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (job of visible(); track job.id) {
+            <tr>
+              <td>
+                <strong>{{ job.fileName }}</strong>
+                <span class="muted">{{ job.sizeBytes | number }} bytes</span>
+                @if (job.error) {
+                  <span class="error">{{ job.error }}</span>
+                }
+                @if (job.status === 'Duplicate') {
+                  <span class="muted">Same content as document {{ job.duplicateOfDocumentId }}</span>
+                }
+              </td>
+              <td><span [class]="'badge ' + job.status.toLowerCase()">{{ job.status }}</span></td>
+              <td>{{ job.attempts }}</td>
+              <td>{{ job.chunkCount ?? '–' }}</td>
+              <td>{{ job.createdAt | date: 'short' }}</td>
+              <td>
+                @if (durationSeconds(job); as seconds) {
+                  {{ seconds | number: '1.1-1' }} s
+                } @else {
+                  –
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
